@@ -173,7 +173,9 @@ int main()
 	//evo.runEdgeDirectVO();
 
 	//EdgeVO::EdgeDirectVOMultiThread evo;
+	std::cout << "runEdgeDirectVO - start" << std::endl;
 	evo.runEdgeDirectVO();
+	std::cout << "runEdgeDirectVO - end" << std::endl;
 
 	//EdgeVO::Trajectory t;
 	

@@ -34,6 +34,9 @@ void readAssocTextfile(std::string filename,
 {
   std::string line;
   std::ifstream in_stream(filename.c_str());
+  
+  std::cout << filename << std::endl;
+  
   while (!in_stream.eof()) {
     std::getline(in_stream, line);
     std::stringstream ss(line);
@@ -47,8 +50,10 @@ void readAssocTextfile(std::string filename,
       }
       if (count == 2) {
         inputRGBPaths.push_back(EdgeVO::Settings::DATASET_DIRECTORY + buf);
+        std::cout << buf << std::endl;
       } else if (count == 4) {
         inputDepthPaths.push_back(EdgeVO::Settings::DATASET_DIRECTORY + buf);
+        std::cout << buf << std::endl;
       }
     }
   }
@@ -73,7 +78,10 @@ void readAssocTextfile(std::string filename,
 Sequence::Sequence(std::string filename)
     : m_referenceIndex(0) , m_currentIndex(1)
 {
+    //std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
     readAssocTextfile(filename, m_imagePaths, m_depthPaths, m_timestamps);
+
+    //std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - readAssocTextfile complete." << std::endl;
     
     m_numDepthFiles = m_depthPaths.size();
     m_numImageFiles = m_imagePaths.size();
@@ -175,7 +183,7 @@ void Sequence::printCameraMatrix(int level)
     std::cout << m_cameraMatrix[level] << std::endl;
 }
 
-void Sequence::advanceSequence()
+bool Sequence::advanceSequence()
 {
     ++m_currentIndex;
     ++m_referenceIndex;
@@ -188,9 +196,16 @@ void Sequence::advanceSequence()
     {
         delete m_current;
     }
+
+    std::cout << "m_imagePaths idx: " << m_currentIndex << "(size: " << m_imagePaths.size() << ")" << std::endl;
+    std::cout << "m_depthPaths idx: " << m_currentIndex << "(size: " << m_depthPaths.size() << ")" << std::endl;
+
+    if(m_currentIndex >= m_imagePaths.size() || m_currentIndex >= m_depthPaths.size())
+        return false;
     
     m_current = new Frame(m_imagePaths[m_currentIndex], m_depthPaths[m_currentIndex], this);
 
+    return true;
 }
 
 void Sequence::makeCurrentFramePyramids()

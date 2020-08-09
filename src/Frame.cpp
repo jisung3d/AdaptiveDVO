@@ -28,6 +28,13 @@ Frame::Frame(std::string imagePath, std::string depthPath, Sequence* seq)
     :m_image(cv::imread(imagePath, cv::ImreadModes::IMREAD_GRAYSCALE)) , m_depthMap(cv::imread(depthPath, cv::ImreadModes::IMREAD_UNCHANGED)) , 
     m_imageName(imagePath), m_depthName(depthPath), m_seq(seq)
 {
+    // std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+
+    // std::cout << "imagePath: " << imagePath << std::endl;
+    // std::cout << "depthPath: " << depthPath << std::endl;
+    // std::cout << "m_image: " << m_image.cols << " x " << m_image.rows << "(ch: " << m_image.channels() << ")" << std::endl;    
+    // std::cout << "m_depthMap: " << m_depthMap.cols << " x " << m_depthMap.rows << "(ch: " << m_depthMap.channels() << ")" << std::endl;
+
     //m_image.convertTo(m_image, CV_32FC1);
     //m_depthMap.convertTo(m_depthMap, CV_32FC1, EdgeVO::Settings::PIXEL_TO_METER_SCALE_FACTOR);
     m_pyramidImageUINT.resize(EdgeVO::Settings::PYRAMID_DEPTH);
@@ -41,7 +48,7 @@ Frame::Frame(std::string imagePath, std::string depthPath, Sequence* seq)
     m_pyramidImageUINT[0] = m_image.clone(); 
     m_pyramidImage[0] = m_image;
     m_pyramidImage[0].convertTo(m_pyramidImage[0], CV_32FC1);
-    m_pyramidDepth[0] = m_depthMap;
+    m_pyramidDepth[0] = m_depthMap;    
     m_pyramidDepth[0].convertTo(m_pyramidDepth[0], CV_32FC1, EdgeVO::Settings::PIXEL_TO_METER_SCALE_FACTOR);
     //m_pyramidImage.push_back(m_image);
 #ifdef SFORESTS_EDGES
@@ -52,6 +59,7 @@ Frame::Frame(std::string imagePath, std::string depthPath, Sequence* seq)
     m_sforestDetector = nullptr;
 #endif
     
+    // std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
 }
 
 Frame::Frame(Mat& image, Mat& depthMap)
@@ -136,7 +144,7 @@ cv::Mat Frame::getImageVector(int lvl) const
 }
 
 Mat Frame::getDepthMap(int lvl) const
-{
+{   
     return (m_pyramidDepth[lvl].clone()).reshape(1, m_pyramidDepth[lvl].rows * m_pyramidDepth[lvl].cols);
 }
 

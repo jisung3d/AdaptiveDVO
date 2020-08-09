@@ -99,7 +99,7 @@ void Statistics::printFinalStatistics()
     printf("[Min Latency]:\t\t\t[%.4f ms]\n", getMinLatency() );
     printf("[Std. Dev. Latency]:\t\t[%.4f ms]\n", getStdDevLatency() );
     printf("[End Statistics]\n");
-    printEvalStatement();
+    //printEvalStatement();
     
 }
 

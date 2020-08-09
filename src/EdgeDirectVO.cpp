@@ -1,3 +1,4 @@
+#include <iostream>
 #include "EdgeDirectVO.h"
 #include "CycleTimer.h"
 #include <algorithm>
@@ -17,6 +18,8 @@
 #include <iterator>
 #include <algorithm>
 
+//#define DISPLAY_SEQUENCE
+//#define DISPLAY_LOGS
 
 namespace EdgeVO{
     using namespace cv;
@@ -24,8 +27,10 @@ EdgeDirectVO::EdgeDirectVO()
     :m_sequence(EdgeVO::Settings::ASSOC_FILE) , m_trajectory() , 
      m_lambda(0.)
 {
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#endif
     int length = m_sequence.getFrameHeight( getBottomPyramidLevel() ) * m_sequence.getFrameWidth( getBottomPyramidLevel() );
-    
     m_X3DVector.resize(EdgeVO::Settings::PYRAMID_DEPTH); // Vector for each pyramid level
     for(size_t i = 0; i < m_X3DVector.size(); ++i)
         m_X3DVector[i].resize(length / std::pow(4, i) , Eigen::NoChange); //3 Vector for each pyramid for each image pixel
@@ -46,7 +51,9 @@ EdgeDirectVO::EdgeDirectVO()
     m_edgeMask.resize(length);
 
     m_outputFile.open(EdgeVO::Settings::RESULTS_FILE);
-
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#endif
 }
 
 EdgeDirectVO::EdgeDirectVO(const EdgeDirectVO& cp)
@@ -71,14 +78,20 @@ EdgeDirectVO& EdgeDirectVO::operator=(const EdgeDirectVO& rhs)
 
 void EdgeDirectVO::runEdgeDirectVO()
 {
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#endif
+
     //Start timer for stats
     m_statistics.start();
+
     //Make Pyramid for Reference frame
     m_sequence.makeReferenceFramePyramids();
-    // Run for entire sequence
 
+    // Run for entire sequence
     //Prepare some vectors
     prepare3DPoints();
+
     //Init camera_pose with ground truth trajectory to make comparison easy
     Pose camera_pose = m_trajectory.initializePoseToGroundTruth(m_sequence.getFirstTimeStamp());
     Pose keyframe_pose = camera_pose;
@@ -86,9 +99,9 @@ void EdgeDirectVO::runEdgeDirectVO()
     Pose relative_pose;
 
     // Start clock timer
-    
     outputPose(camera_pose, m_sequence.getFirstTimeStamp());
     m_statistics.addStartTime((float) EdgeVO::CycleTimer::currentSeconds());
+
     for (size_t n = 0; m_sequence.sequenceNotFinished(); ++n)
     {
         std::cout << std::endl << camera_pose << std::endl;
@@ -121,8 +134,15 @@ void EdgeDirectVO::runEdgeDirectVO()
             keyframe_pose = camera_pose;
             relative_pose.setIdentityPose();
         }
+
         //Constant motion assumption
+#ifdef DISPLAY_LOGS
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - updateKeyFramePose" << std::endl;
+#endif
         relative_pose.updateKeyFramePose(relative_pose.getPoseMatrix(), m_trajectory.getLastRelativePose());
+#ifdef DISPLAY_LOGS
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - setPose" << std::endl;
+#endif
         relative_pose.setPose(se3ExpEigen(se3LogEigen(relative_pose.getPoseMatrix())));
 
         //Constant acc. assumption
@@ -132,17 +152,22 @@ void EdgeDirectVO::runEdgeDirectVO()
         // For each image pyramid level, starting at the top, going down
         for (int lvl = getTopPyramidLevel(); lvl >= getBottomPyramidLevel(); --lvl)
         {
-            
+#ifdef DISPLAY_LOGS
+            std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - prepareVectors" << std::endl;
+#endif
             const Mat cameraMatrix(m_sequence.getCameraMatrix(lvl));
             prepareVectors(lvl);
             
-            //make3DPoints(cameraMatrix, lvl);
+            //make3DPoints(cameraMatrix, lvl);            
 
             float lambda = 0.f;
             float error_last = EdgeVO::Settings::INF_F;
             float error = error_last;
             for(int i = 0; i < EdgeVO::Settings::MAX_ITERATIONS_PER_PYRAMID[ lvl ]; ++i)
             {
+#ifdef DISPLAY_LOGS
+                std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - warpAndProject" << std::endl;
+#endif
                 error_last = error;
                 error = warpAndProject(relative_pose.inversePoseEigen(), lvl);
                 // Levenberg-Marquardt
@@ -152,7 +177,6 @@ void EdgeDirectVO::runEdgeDirectVO()
                     Eigen::Matrix<double, 6 , Eigen::RowMajor> del;
                     solveSystemOfEquations(lambda, lvl, del);
                     //std::cout << del << std::endl;
-
                     
                     if( (del.segment<3>(0)).dot(del.segment<3>(0)) < EdgeVO::Settings::MIN_TRANSLATION_UPDATE & 
                         (del.segment<3>(3)).dot(del.segment<3>(3)) < EdgeVO::Settings::MIN_ROTATION_UPDATE    )
@@ -176,32 +200,58 @@ void EdgeDirectVO::runEdgeDirectVO()
                 }
             }
         }
+
+#ifdef DISPLAY_LOGS
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - updateKeyFramePose" << std::endl;
+#endif
         camera_pose.updateKeyFramePose(keyframe_pose.getPoseMatrix(), relative_pose.getPoseMatrix());
+#ifdef DISPLAY_LOGS
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - outputPose" << std::endl;
+#endif
         outputPose(camera_pose, m_sequence.getCurrentTimeStamp());
         //At end, update sequence for next image pair
         float endTime = (float) EdgeVO::CycleTimer::currentSeconds();
         m_trajectory.addPose(camera_pose);
-                
+
         // Don't time past this part (reading from disk)
-        m_sequence.advanceSequence();
+#ifdef DISPLAY_LOGS                
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - addDurationForFrame" << std::endl;
+#endif
         m_statistics.addDurationForFrame(startTime, endTime);
         m_statistics.addCurrentTime((float) EdgeVO::CycleTimer::currentSeconds());
+#ifdef DISPLAY_LOGS                
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - printStatistics - E" << std::endl;
+#endif
         m_statistics.printStatistics();
-        
+#ifdef DISPLAY_LOGS                
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - advanceSequence - E" << std::endl;
+#endif
+        if(!m_sequence.advanceSequence()) break;
+#ifdef DISPLAY_LOGS                
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - advanceSequence - X" << std::endl;
+#endif
     }
     // End algorithm level timer
     m_statistics.end();
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#endif
+
     return;
 }
 
 void EdgeDirectVO::prepareVectors(int lvl)
 {
-    cv2eigen(m_sequence.getReferenceFrame()->getDepthMap(lvl), m_Z);
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#endif
+ 
     cv2eigen(m_sequence.getCurrentFrame()->getEdges(lvl), m_edgeMask);
     cv2eigen(m_sequence.getReferenceFrame()->getImageVector(lvl), m_im1);
     cv2eigen(m_sequence.getCurrentFrame()->getImageVector(lvl), m_im2);
     cv2eigen(m_sequence.getCurrentFrame()->getGradientX(lvl), m_gx);
     cv2eigen(m_sequence.getCurrentFrame()->getGradientY(lvl), m_gy);
+    cv2eigen(m_sequence.getReferenceFrame()->getDepthMap(lvl), m_Z);
     
     size_t numElements;
 ////////////////////////////////////////////////////////////
@@ -263,6 +313,10 @@ void EdgeDirectVO::prepareVectors(int lvl)
 // Edge Direct VO
 ////////////////////////////////////////////////////////////
     numElements = (m_edgeMask.array() != 0).count();
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - numElements" << std::endl;
+#endif
     
     m_im1Final.resize(numElements);
     m_XFinal.resize(numElements);
@@ -289,7 +343,10 @@ void EdgeDirectVO::prepareVectors(int lvl)
     m_Z = m_ZFinal;
     m_edgeMask.resize(numElements);
     m_edgeMask = m_finalMask;
-    
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#endif
 }
 
 void EdgeDirectVO::make3DPoints(const cv::Mat& cameraMatrix, int lvl)

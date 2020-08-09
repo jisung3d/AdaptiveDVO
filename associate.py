@@ -118,11 +118,17 @@ if __name__ == '__main__':
 
     matches = associate(first_list, second_list,float(args.offset),float(args.max_difference))    
 
+    f = open("assoc.txt", 'w')
+
     if args.first_only:
         for a,b in matches:
             print("%f %s"%(a," ".join(first_list[a])))
+            f.write("%f %s\n"%(a," ".join(first_list[a])))
     else:
         for a,b in matches:
             print("%f %s %f %s"%(a," ".join(first_list[a]),b-float(args.offset)," ".join(second_list[b])))
+            f.write("%f %s %f %s\n"%(a," ".join(first_list[a]),b-float(args.offset)," ".join(second_list[b])))
+
+    f.close()
             
         
