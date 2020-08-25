@@ -18,8 +18,10 @@
 #include <iterator>
 #include <algorithm>
 
+#define REGULAR_DIRECT_VO
+
 //#define DISPLAY_SEQUENCE
-//#define DISPLAY_LOGS
+#define DISPLAY_LOGS
 
 namespace EdgeVO{
     using namespace cv;
@@ -62,7 +64,14 @@ EdgeDirectVO::EdgeDirectVO(const EdgeDirectVO& cp)
 
 EdgeDirectVO::~EdgeDirectVO()
 {
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#endif
     m_outputFile.close();
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#endif
 }
 
 EdgeDirectVO& EdgeDirectVO::operator=(const EdgeDirectVO& rhs)
@@ -170,6 +179,10 @@ void EdgeDirectVO::runEdgeDirectVO()
 #endif
                 error_last = error;
                 error = warpAndProject(relative_pose.inversePoseEigen(), lvl);
+
+                ///////////////////////////////////////////////////////////////////////////
+                // This part should be changed to test another Loss functions.
+                ///////////////////////////////////////////////////////////////////////////
                 // Levenberg-Marquardt
                 if( error < error_last)
                 {
@@ -198,6 +211,7 @@ void EdgeDirectVO::runEdgeDirectVO()
                     else
                         lambda *= EdgeVO::Settings::LAMBDA_UPDATE_FACTOR;
                 }
+                ///////////////////////////////////////////////////////////////////////////
             }
         }
 

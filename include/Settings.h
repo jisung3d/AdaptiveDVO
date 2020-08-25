@@ -60,7 +60,7 @@ namespace EdgeVO{
             std::string("rgbd_dataset_freiburg1_plant")
         };
 
-        const int DATASET_NUMBER = 1;
+        const int DATASET_NUMBER = 0;
 
         const int KEYFRAME_INTERVAL(3);
 

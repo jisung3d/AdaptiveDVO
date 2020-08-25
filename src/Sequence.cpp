@@ -189,12 +189,12 @@ bool Sequence::advanceSequence()
     ++m_referenceIndex;
     if (m_referenceIndex % EdgeVO::Settings::KEYFRAME_INTERVAL == 0)
     {
-        delete m_reference;
+        if(m_reference != nullptr) delete m_reference;
         m_reference = m_current;
     }
     else
     {
-        delete m_current;
+        if(m_current != nullptr) delete m_current;
     }
 
     std::cout << "m_imagePaths idx: " << m_currentIndex << "(size: " << m_imagePaths.size() << ")" << std::endl;
