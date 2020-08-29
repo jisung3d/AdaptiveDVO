@@ -85,6 +85,175 @@ EdgeDirectVO& EdgeDirectVO::operator=(const EdgeDirectVO& rhs)
 
 }
 
+void EdgeDirectVO::runAdaptiveDirectVO()
+{
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#endif
+
+    //Start timer for stats
+    m_statistics.start();
+
+    //Make Pyramid for Reference frame
+    m_sequence.makeReferenceFramePyramids();
+
+    // Run for entire sequence
+    //Prepare some vectors
+    prepare3DPoints();
+
+    //Init camera_pose with ground truth trajectory to make comparison easy
+    Pose camera_pose = m_trajectory.initializePoseToGroundTruth(m_sequence.getFirstTimeStamp());
+    Pose keyframe_pose = camera_pose;
+    // relative_pose intiialized to identity matrix
+    Pose relative_pose;
+
+    // Start clock timer
+    outputPose(camera_pose, m_sequence.getFirstTimeStamp());
+    m_statistics.addStartTime((float) EdgeVO::CycleTimer::currentSeconds());
+
+    for (size_t n = 0; m_sequence.sequenceNotFinished(); ++n)
+    {
+        std::cout << std::endl << camera_pose << std::endl;
+
+#ifdef DISPLAY_SEQUENCE
+        //We re-use current frame for reference frame info
+        m_sequence.makeCurrentFramePyramids();
+
+        //Display images
+        int keyPressed1 = m_sequence.displayCurrentImage();
+        int keyPressed2 = m_sequence.displayCurrentEdge();
+        int keyPressed3 = m_sequence.displayCurrentDepth();
+        if(keyPressed1 == EdgeVO::Settings::TERMINATE_DISPLAY_KEY 
+            || keyPressed2 == EdgeVO::Settings::TERMINATE_DISPLAY_KEY
+            || keyPressed3 == EdgeVO::Settings::TERMINATE_DISPLAY_KEY) 
+        {
+            terminationRequested();
+            break;
+        }
+        //Start algorithm timer for each iteration
+        float startTime = (float) EdgeVO::CycleTimer::currentSeconds();
+#else
+        //Start algorithm timer for each iteration
+        float startTime = (float) EdgeVO::CycleTimer::currentSeconds();
+        m_sequence.makeCurrentFramePyramids();
+#endif //DISPLAY_SEQUENCE
+
+        if( n % EdgeVO::Settings::KEYFRAME_INTERVAL == 0 )
+        {
+            keyframe_pose = camera_pose;
+            relative_pose.setIdentityPose();
+        }
+
+        //Constant motion assumption
+#ifdef DISPLAY_LOGS
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - updateKeyFramePose" << std::endl;
+#endif
+        relative_pose.updateKeyFramePose(relative_pose.getPoseMatrix(), m_trajectory.getLastRelativePose());
+#ifdef DISPLAY_LOGS
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - setPose" << std::endl;
+#endif
+        relative_pose.setPose(se3ExpEigen(se3LogEigen(relative_pose.getPoseMatrix())));
+
+        //Constant acc. assumption
+        //relative_pose.updateKeyFramePose(relative_pose.getPoseMatrix(), m_trajectory.get2LastRelativePose());
+        //relative_pose.setPose(se3ExpEigen(se3LogEigen(relative_pose.getPoseMatrix())));
+        
+        // For each image pyramid level, starting at the top, going down
+        for (int lvl = getTopPyramidLevel(); lvl >= getBottomPyramidLevel(); --lvl)
+        {
+#ifdef DISPLAY_LOGS
+            std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - prepareVectors" << std::endl;
+#endif
+            const Mat cameraMatrix(m_sequence.getCameraMatrix(lvl));
+            prepareVectors(lvl);
+            
+            //make3DPoints(cameraMatrix, lvl);            
+
+            float lambda = 0.f;
+            float error_last = EdgeVO::Settings::INF_F;
+            float error = error_last;
+            for(int i = 0; i < EdgeVO::Settings::MAX_ITERATIONS_PER_PYRAMID[ lvl ]; ++i)
+            {
+#ifdef DISPLAY_LOGS
+                std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - warpAndProject" << std::endl;
+#endif
+                error_last = error;
+                error = warpAndProject(relative_pose.inversePoseEigen(), lvl);
+
+                ///////////////////////////////////////////////////////////////////////////
+                // This part should be changed to test another Loss functions.
+                ///////////////////////////////////////////////////////////////////////////
+                // Levenberg-Marquardt
+                if( error < error_last)
+                {
+                    // Update relative pose
+                    Eigen::Matrix<double, 6 , Eigen::RowMajor> del;
+                    solveSystemOfEquations(lambda, lvl, del);
+                    //std::cout << del << std::endl;
+                    
+                    if( (del.segment<3>(0)).dot(del.segment<3>(0)) < EdgeVO::Settings::MIN_TRANSLATION_UPDATE & 
+                        (del.segment<3>(3)).dot(del.segment<3>(3)) < EdgeVO::Settings::MIN_ROTATION_UPDATE    )
+                        break;
+
+                    cv::Mat delMat = se3ExpEigen(del);
+                    relative_pose.updatePose( delMat );
+
+                    //Update lambda
+                    if(lambda <= EdgeVO::Settings::LAMBDA_MAX)
+                        lambda = EdgeVO::Settings::LAMBDA_MIN;
+                    else
+                        lambda *= EdgeVO::Settings::LAMBDA_UPDATE_FACTOR;
+                }
+                else
+                {
+                    if(lambda == EdgeVO::Settings::LAMBDA_MIN)
+                        lambda = EdgeVO::Settings::LAMBDA_MAX;
+                    else
+                        lambda *= EdgeVO::Settings::LAMBDA_UPDATE_FACTOR;
+                }
+                ///////////////////////////////////////////////////////////////////////////
+            }
+        }
+
+#ifdef DISPLAY_LOGS
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - updateKeyFramePose" << std::endl;
+#endif
+        camera_pose.updateKeyFramePose(keyframe_pose.getPoseMatrix(), relative_pose.getPoseMatrix());
+#ifdef DISPLAY_LOGS
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - outputPose" << std::endl;
+#endif
+        outputPose(camera_pose, m_sequence.getCurrentTimeStamp());
+        //At end, update sequence for next image pair
+        float endTime = (float) EdgeVO::CycleTimer::currentSeconds();
+        m_trajectory.addPose(camera_pose);
+
+        // Don't time past this part (reading from disk)
+#ifdef DISPLAY_LOGS                
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - addDurationForFrame" << std::endl;
+#endif
+        m_statistics.addDurationForFrame(startTime, endTime);
+        m_statistics.addCurrentTime((float) EdgeVO::CycleTimer::currentSeconds());
+#ifdef DISPLAY_LOGS                
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - printStatistics - E" << std::endl;
+#endif
+        m_statistics.printStatistics();
+#ifdef DISPLAY_LOGS                
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - advanceSequence - E" << std::endl;
+#endif
+        if(!m_sequence.advanceSequence()) break;
+#ifdef DISPLAY_LOGS                
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - advanceSequence - X" << std::endl;
+#endif
+    }
+    // End algorithm level timer
+    m_statistics.end();
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#endif
+
+    return;
+}
+
 void EdgeDirectVO::runEdgeDirectVO()
 {
 #ifdef DISPLAY_LOGS
@@ -547,6 +716,42 @@ void EdgeDirectVO::solveSystemOfEquations(const float lambda, const int lvl, Eig
 
     
 }
+
+void EdgeDirectVO::solveSystemOfEquationsForADVO(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate)
+{
+    const Mat cameraMatrix(m_sequence.getCameraMatrix(lvl));
+    const float fx = cameraMatrix.at<float>(0, 0);
+    const float cx = cameraMatrix.at<float>(0, 2);
+    const float fy = cameraMatrix.at<float>(1, 1);
+    const float cy = cameraMatrix.at<float>(1, 2);
+
+    size_t numElements = m_im2Final.rows();
+    Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> Z2 = m_ZFinal.array() * m_ZFinal.array();
+
+    m_Jacobian.resize(numElements, Eigen::NoChange);
+    m_Jacobian.col(0) =  m_weights.array() * fx * ( m_gxFinal.array() / m_ZFinal.array() );
+
+    m_Jacobian.col(1) =  m_weights.array() * fy * ( m_gyFinal.array() / m_ZFinal.array() );
+
+    m_Jacobian.col(2) = - m_weights.array()* ( fx * ( m_XFinal.array() * m_gxFinal.array() ) + fy * ( m_YFinal.array() * m_gyFinal.array() ) )
+                        / ( Z2.array() );
+
+    m_Jacobian.col(3) = - m_weights.array() * ( fx * m_XFinal.array() * m_YFinal.array() * m_gxFinal.array() / Z2.array()
+                         + fy *( 1.f + ( m_YFinal.array() * m_YFinal.array() / Z2.array() ) ) * m_gyFinal.array() );
+
+    m_Jacobian.col(4) = m_weights.array() * ( fx * (1.f + ( m_XFinal.array() * m_XFinal.array() / Z2.array() ) ) * m_gxFinal.array() 
+                        + fy * ( m_XFinal.array() * m_YFinal.array() * m_gyFinal.array() ) / Z2.array() );
+
+    m_Jacobian.col(5) = m_weights.array() * ( -fx * ( m_YFinal.array() * m_gxFinal.array() ) + fy * ( m_XFinal.array() * m_gyFinal.array() ) )
+                        / m_ZFinal.array();
+    
+    m_residual.array() *= m_weights.array();
+    
+    poseupdate = -( (m_Jacobian.transpose() * m_Jacobian).cast<double>() ).ldlt().solve( (m_Jacobian.transpose() * m_residual).cast<double>() );
+
+    
+}
+
 float EdgeDirectVO::interpolateVector(const Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor>& toInterp, float x, float y, int w) const
 {
     int xi = (int) x;

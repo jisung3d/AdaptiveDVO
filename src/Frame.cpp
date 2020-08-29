@@ -41,8 +41,11 @@ Frame::Frame(std::string imagePath, std::string depthPath, Sequence* seq)
     m_pyramidImage.resize(EdgeVO::Settings::PYRAMID_DEPTH);
     m_pyramidDepth.resize(EdgeVO::Settings::PYRAMID_DEPTH);
     m_pyramidEdge.resize(EdgeVO::Settings::PYRAMID_DEPTH);
+    m_pyramidLaplacian.resize(EdgeVO::Settings::PYRAMID_DEPTH);
     m_pyramid_Idx.resize(EdgeVO::Settings::PYRAMID_DEPTH);
     m_pyramid_Idy.resize(EdgeVO::Settings::PYRAMID_DEPTH);
+    m_pyramid_Idxx.resize(EdgeVO::Settings::PYRAMID_DEPTH);
+    m_pyramid_Idyy.resize(EdgeVO::Settings::PYRAMID_DEPTH);    
 
 
     m_pyramidImageUINT[0] = m_image.clone(); 
@@ -81,9 +84,12 @@ void Frame::releaseAllVectors()
     m_pyramidImage.clear();
     m_pyramid_Idx.clear();
     m_pyramid_Idy.clear();
+    m_pyramid_Idxx.clear();
+    m_pyramid_Idyy.clear();
     m_pyramidDepth.clear();
     m_pyramidMask.clear();
     m_pyramidEdge.clear();
+    m_pyramidLaplacian.clear();
     m_pyramidImageUINT.clear();
     //m_pyramidImageFloat.clear();
 }
@@ -156,6 +162,10 @@ Mat Frame::getEdges(int lvl) const
 {
     return (m_pyramidEdge[lvl].clone()).reshape(1, m_pyramidEdge[lvl].rows * m_pyramidEdge[lvl].cols);
 }
+cv::Mat Frame::getLaplacian(int lvl) const
+{
+    return m_pyramidLaplacian[lvl];
+}
 cv::Mat Frame::getGradientX(int lvl) const
 {
     return (m_pyramid_Idx[lvl].clone()).reshape(1, m_pyramid_Idx[lvl].rows * m_pyramid_Idx[lvl].cols);
@@ -198,21 +208,33 @@ void Frame::createPyramid(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSi
     dst[0] = src;
     for(size_t i = 1; i < pyramidSize; ++i)
         cv::resize(dst[i-1], dst[i],cv::Size(0, 0), 0.5, 0.5, interpolationFlag);
-    
+ 
     
 }
 
-void Frame::createImageGradientPyramids()
+void Frame::createImageGradientPyramids(bool flagLaplacian)
 {
     int one(1);
     int zero(0);
     double scale = 0.5;
 
+    // Ix
     calcGradientX(m_pyramidImage[0], m_pyramid_Idx[0]);
+    // Iy
     calcGradientY(m_pyramidImage[0], m_pyramid_Idy[0]);
    
     createPyramid(m_pyramid_Idx[0], m_pyramid_Idx, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
     createPyramid(m_pyramid_Idy[0], m_pyramid_Idy, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
+
+    if(flagLaplacian){
+        // Ixx, Iyy
+        calcGradientX(m_pyramid_Idx[0], m_pyramid_Idxx[0]);
+        calcGradientY(m_pyramid_Idy[0], m_pyramid_Idyy[0]);
+        // Laplacian
+        m_pyramidLaplacian[0] = m_pyramid_Idxx[0] + m_pyramid_Idyy[0];
+
+        createPyramid(m_pyramidLaplacian[0], m_pyramidLaplacian, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
+    }
 }
 
 void Frame::calcGX(cv::Mat &src)

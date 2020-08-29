@@ -21,6 +21,8 @@ class EdgeDirectVO{
         // Main Algorithm //
         void runEdgeDirectVO();
         void solveSystemOfEquations(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate);
+        void runAdaptiveDirectVO();
+        void solveSystemOfEquationsForADVO(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate);
         // Helper Algorithms //
         void prepareVectors(int lvl);
         void warpAndCalculateResiduals(const Pose& pose, const std::vector<float>& Z, const std::vector<bool>& E, const int h, const int w, const cv::Mat& cameraMatrix, const int lvl);

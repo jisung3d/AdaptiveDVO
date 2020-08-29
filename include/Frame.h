@@ -30,6 +30,7 @@ class Frame{
         cv::Mat getDepthMap(int lvl) const;
         cv::Mat getMask(int lvl) const;
         cv::Mat getEdges(int lvl) const;
+        cv::Mat getLaplacian(int lvl) const;
         cv::Mat getGradientX(int lvl) const;
         cv::Mat getGradientY(int lvl) const;
         void calcGX(cv::Mat &src);
@@ -50,7 +51,7 @@ class Frame{
         cv::Mat& getDepthForDisplayOnly();
 
         void makePyramids();
-        void createImageGradientPyramids();
+        void createImageGradientPyramids(bool flagLaplacian = false);
 
         // Canny Edges
         void createCannyEdgePyramids();
@@ -75,6 +76,8 @@ class Frame{
         //std::vector<cv::Mat> m_pyramidImageFloat;
         std::vector<cv::Mat> m_pyramid_Idx;
         std::vector<cv::Mat> m_pyramid_Idy;
+        std::vector<cv::Mat> m_pyramid_Idxx, m_pyramid_Idyy;
+        std::vector<cv::Mat> m_pyramidLaplacian;
         std::vector<cv::Mat> m_pyramidEdge;
         std::vector<cv::Mat> m_pyramidDepth;
         std::vector<cv::Mat> m_pyramidMask;
