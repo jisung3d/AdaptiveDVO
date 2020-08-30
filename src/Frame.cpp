@@ -13,6 +13,8 @@
 // For fast edge detection using structure forests
 #include <opencv2/ximgproc.hpp>
 
+#define TURN_ON_ADAPTIVE_DVO true
+
 using namespace cv;
 namespace EdgeVO{
 
@@ -196,7 +198,7 @@ void Frame::makePyramids()
     // Sobel
     createSobelEdgePyramids();
 #endif
-    createImageGradientPyramids();
+    createImageGradientPyramids(TURN_ON_ADAPTIVE_DVO);
     createPyramid(m_pyramidDepth[0], m_pyramidDepth, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
     
 

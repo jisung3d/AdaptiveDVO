@@ -537,7 +537,7 @@ void EdgeDirectVO::make3DPoints(const cv::Mat& cameraMatrix, int lvl)
     m_X3D = m_X3DVector[lvl].array() * m_Z.replicate(1, m_X3DVector[lvl].cols() ).array();
 }
 
-float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int lvl)
+float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int lvl, , bool flagGradMax)
 {
     Eigen::Matrix<float,3,3> R = (invPose.block<3,3>(0,0)).cast<float>() ;
     Eigen::Matrix<float,3,1> t = (invPose.block<3,1>(0,3)).cast<float>() ;
@@ -572,25 +572,50 @@ float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int
     // Check both Z 3D points are >0
     //m_finalMask = m_edgeMask;
 
-    m_finalMask = m_edgeMask;
+    // for Edge DVO
+    if(!flagGradMax){ 
+        m_finalMask = m_edgeMask;
 
-    m_finalMask = (m_newX3D.row(2).transpose().array() <= 0.f).select(0, m_finalMask);
-    //m_finalMask = (m_newX3D.row(2).transpose().array() > EdgeVO::Settings::MAX_Z_DEPTH).select(0, m_finalMask);
+        m_finalMask = (m_newX3D.row(2).transpose().array() <= 0.f).select(0, m_finalMask);
+        //m_finalMask = (m_newX3D.row(2).transpose().array() > EdgeVO::Settings::MAX_Z_DEPTH).select(0, m_finalMask);
 
-    //m_finalMask = (m_newX3D.row(2).transpose().array() > 10.f).select(0, m_finalMask);
-    m_finalMask = (m_X3D.col(2).array() <= 0.f).select(0, m_finalMask);
-    //m_finalMask = (m_X3D.col(2).array() > 10.f).select(0, m_finalMask);
-    m_finalMask = ( (m_X3D.col(2).array()).isFinite() ).select(m_finalMask, 0);
-    m_finalMask = ( (m_newX3D.row(2).transpose().array()).isFinite() ).select(m_finalMask, 0);
-    
-    // Check new projected x coordinates are: 0 <= x < w-1
-    m_finalMask = (m_warpedX.array() < 0.f).select(0, m_finalMask);
-    m_finalMask = (m_warpedX.array() >= w-2).select(0, m_finalMask);
-    m_finalMask = (m_warpedX.array().isFinite()).select(m_finalMask, 0);
-    // Check new projected x coordinates are: 0 <= y < h-1
-    m_finalMask = (m_warpedY.array() >= h-2).select(0, m_finalMask);
-    m_finalMask = (m_warpedY.array() < 0.f).select(0, m_finalMask);
-    m_finalMask = (m_warpedY.array().isFinite()).select(m_finalMask, 0);
+        //m_finalMask = (m_newX3D.row(2).transpose().array() > 10.f).select(0, m_finalMask);
+        m_finalMask = (m_X3D.col(2).array() <= 0.f).select(0, m_finalMask);
+        //m_finalMask = (m_X3D.col(2).array() > 10.f).select(0, m_finalMask);
+        m_finalMask = ( (m_X3D.col(2).array()).isFinite() ).select(m_finalMask, 0);
+        m_finalMask = ( (m_newX3D.row(2).transpose().array()).isFinite() ).select(m_finalMask, 0);
+        
+        // Check new projected x coordinates are: 0 <= x < w-1
+        m_finalMask = (m_warpedX.array() < 0.f).select(0, m_finalMask);
+        m_finalMask = (m_warpedX.array() >= w-2).select(0, m_finalMask);
+        m_finalMask = (m_warpedX.array().isFinite()).select(m_finalMask, 0);
+        // Check new projected x coordinates are: 0 <= y < h-1
+        m_finalMask = (m_warpedY.array() >= h-2).select(0, m_finalMask);
+        m_finalMask = (m_warpedY.array() < 0.f).select(0, m_finalMask);
+        m_finalMask = (m_warpedY.array().isFinite()).select(m_finalMask, 0);
+    }
+    // for Adaptive DVO
+    else{
+        m_finalMask = m_edgeMask;
+
+        m_finalMask = (m_newX3D.row(2).transpose().array() <= 0.f).select(0, m_finalMask);
+        //m_finalMask = (m_newX3D.row(2).transpose().array() > EdgeVO::Settings::MAX_Z_DEPTH).select(0, m_finalMask);
+
+        //m_finalMask = (m_newX3D.row(2).transpose().array() > 10.f).select(0, m_finalMask);
+        m_finalMask = (m_X3D.col(2).array() <= 0.f).select(0, m_finalMask);
+        //m_finalMask = (m_X3D.col(2).array() > 10.f).select(0, m_finalMask);
+        m_finalMask = ( (m_X3D.col(2).array()).isFinite() ).select(m_finalMask, 0);
+        m_finalMask = ( (m_newX3D.row(2).transpose().array()).isFinite() ).select(m_finalMask, 0);
+        
+        // Check new projected x coordinates are: 0 <= x < w-1
+        m_finalMask = (m_warpedX.array() < 0.f).select(0, m_finalMask);
+        m_finalMask = (m_warpedX.array() >= w-2).select(0, m_finalMask);
+        m_finalMask = (m_warpedX.array().isFinite()).select(m_finalMask, 0);
+        // Check new projected x coordinates are: 0 <= y < h-1
+        m_finalMask = (m_warpedY.array() >= h-2).select(0, m_finalMask);
+        m_finalMask = (m_warpedY.array() < 0.f).select(0, m_finalMask);
+        m_finalMask = (m_warpedY.array().isFinite()).select(m_finalMask, 0);
+    }
     
 
 // If we want every point, save some computation time- see the #else

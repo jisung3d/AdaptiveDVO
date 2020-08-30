@@ -31,7 +31,7 @@ class EdgeDirectVO{
 
         void prepare3DPoints( );
         void make3DPoints(const cv::Mat& cameraMatrix, int lvl);
-        float warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int lvl);
+        float warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int lvl, bool flagGradMax = false);
         float interpolateVector(const Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor>& toInterp, float x, float y, int w) const;
         bool checkBounds(float x, float xlim, float y, float ylim, float oldZ, float newZ, bool edgePixel);
 
@@ -53,10 +53,14 @@ class EdgeDirectVO{
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_im2Final;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_residual;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_rsquared;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_residual_grad;  // for ADVO
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_rsquared_grad;  // for ADVO
         // Matrices and vectors for solving Least Squares problem
         // poseupdate = -((1+lambda).*(w.*J))\(w.*r);
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_weights;
         Eigen::Matrix<float, Eigen::Dynamic, 6, Eigen::RowMajor> m_Jacobian;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_weights_grad;   // for ADVO
+        Eigen::Matrix<float, Eigen::Dynamic, 6, Eigen::RowMajor> m_Jacobian_grad;   // for ADVO
         
 
 
@@ -82,8 +86,16 @@ class EdgeDirectVO{
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_gxFinal;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_gyFinal;
         
+        // Vectors of Image Laplacians
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_G;  // for ADVO
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_Gx;  // for ADVO
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_Gy;  // for ADVO
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_GxFinal;  // for ADVO
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_GyFinal;  // for ADVO
+        
         // Mask for edge pixels as well as to prevent out of bounds, NaN, etc.
         Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::RowMajor> m_finalMask;
+        Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::RowMajor> m_finalMaskGrad;  // for ADVO
         Eigen::Matrix<unsigned char, Eigen::Dynamic, Eigen::RowMajor> m_edgeMask;
         float m_lambda;
 
