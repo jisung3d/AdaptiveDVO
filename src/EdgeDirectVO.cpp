@@ -18,10 +18,8 @@
 #include <iterator>
 #include <algorithm>
 
-#define REGULAR_DIRECT_VO
-
 //#define DISPLAY_SEQUENCE
-#define DISPLAY_LOGS
+//#define DISPLAY_LOGS
 
 namespace EdgeVO{
     using namespace cv;
@@ -51,8 +49,14 @@ EdgeDirectVO::EdgeDirectVO()
     m_ZFinal.resize(length);
     m_Z.resize(length);
     m_edgeMask.resize(length);
+    
+    m_G.resize(length);  // for ADVO
+    m_Gx.resize(length);  // for ADVO
+    m_Gy.resize(length);  // for ADVO
+    m_GxFinal.resize(length);  // for ADVO
+    m_GyFinal.resize(length); 
 
-    m_outputFile.open(EdgeVO::Settings::RESULTS_FILE);
+    m_outputFile.open(EdgeVO::Settings::RESULTS_FILE);    
 #ifdef DISPLAY_LOGS
     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
 #endif
@@ -435,6 +439,10 @@ void EdgeDirectVO::prepareVectors(int lvl)
     cv2eigen(m_sequence.getCurrentFrame()->getGradientX(lvl), m_gx);
     cv2eigen(m_sequence.getCurrentFrame()->getGradientY(lvl), m_gy);
     cv2eigen(m_sequence.getReferenceFrame()->getDepthMap(lvl), m_Z);
+
+#ifdef ADAPTIVE_DVO_FULL
+    cv2eigen(m_sequence.getCurrentFrame()->getLaplacian(lvl), m_G);
+#endif
     
     size_t numElements;
 ////////////////////////////////////////////////////////////
@@ -449,7 +457,9 @@ void EdgeDirectVO::prepareVectors(int lvl)
     numElements = (m_edgeMask.array() != 0).count() * EdgeVO::Settings::PERCENT_EDGES;
     m_edgeMask = (m_edgeMask.array() == 0).select(1, m_edgeMask);
     m_edgeMask = (m_Z.array() <= 0.f).select(0, m_edgeMask);
-
+#elif ADAPTIVE_DVO_FULL | ADAPTIVE_DVO_WITHOUT_GRAD
+    m_edgeMask = (m_Z.array() <= 0.f).select(0, m_edgeMask);
+    m_edgeMask = (m_gx.array()*m_gx.array() + m_gy.array()*m_gy.array() <= m_th_grad_sq[lvl]).select(0, m_edgeMask);
 #else
     m_edgeMask = (m_Z.array() <= 0.f).select(0, m_edgeMask);
     //m_edgeMask = (m_Z.array() <= 0.f).select(0, m_edgeMask);
@@ -490,8 +500,56 @@ void EdgeDirectVO::prepareVectors(int lvl)
         m_finalMask[i] = m_edgeMask[randSample[i]];    
     }
 
+#elif ADAPTIVE_DVO_FULL
+////////////////////////////////////////////////////////////
+// Adaptive Direct VO
+////////////////////////////////////////////////////////////
+    numElements = (m_edgeMask.array() != 0).count();
 
-#else
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - numElements" << std::endl;
+#endif
+    
+    m_im1Final.resize(numElements);
+    m_XFinal.resize(numElements);
+    m_YFinal.resize(numElements);
+    m_ZFinal.resize(numElements);
+    m_X3D.resize(numElements ,Eigen::NoChange);
+    m_finalMask.resize(numElements);
+    m_finalMaskGrad.resize(numElements);
+    size_t idx = 0;    
+    for(int i = 0; i < m_edgeMask.rows(); ++i)
+    {
+        if(m_edgeMask[i] != 0)
+        {
+            // check gradient magnitude.
+            float mag_grad = SQUARE(m_gx[i]) + SQUARE(m_gy[i]);
+#ifdef DISPLAY_LOGS
+            std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - mag_grad: " 
+            << mag_grad << " (th: " << m_th_grad_sq[lvl] << ")" << std::endl;
+#endif         
+            m_im1Final[idx] = m_im1[i];
+            m_ZFinal[idx] = m_Z[i];
+            m_X3D.row(idx) = (m_X3DVector[lvl].row(i)).array() * m_Z[i];
+            
+            m_finalMask[idx] = m_edgeMask[i];                
+            // check gradient-Laplarcian ratio
+            float GLR_sq = SQUARE(m_G[i]);
+            if(GLR_sq > m_th_grad_2_sq[lvl]){
+                m_finalMaskGrad[idx] = m_edgeMask[i];
+            }
+            else{
+                m_finalMaskGrad[idx] = (unsigned char)0;
+            }                
+            ++idx;
+
+#ifdef DISPLAY_LOGS
+            std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - GLR_sq: " 
+                << GLR_sq << " (th: " << m_th_grad_2_sq[lvl] << ")" << std::endl;
+#endif     
+        }
+    }
+#else //  REGULAR_DIRECT_VO true | REGULAR_DIRECT_VO_SUBSET true | EDGEVO_FULL true | ADAPTIVE_DVO_WITHOUT_GRAD true
 ////////////////////////////////////////////////////////////
 // Edge Direct VO
 ////////////////////////////////////////////////////////////
@@ -521,6 +579,8 @@ void EdgeDirectVO::prepareVectors(int lvl)
     }
 
 #endif //EDGEVO_SUBSET_POINTS
+
+
 ////////////////////////////////////////////////////////////
     m_Z.resize(numElements);
     m_Z = m_ZFinal;
@@ -536,8 +596,13 @@ void EdgeDirectVO::make3DPoints(const cv::Mat& cameraMatrix, int lvl)
 {
     m_X3D = m_X3DVector[lvl].array() * m_Z.replicate(1, m_X3DVector[lvl].cols() ).array();
 }
-
-float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int lvl, , bool flagGradMax)
+/////////////////////////////////////////////////////////////////////////////////////
+// TO DO LIST 2020.10.03.
+// TO DO LIST 2020.10.03.
+// TO DO LIST 2020.10.03.
+// TO DO LIST 2020.10.03.
+/////////////////////////////////////////////////////////////////////////////////////
+float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int lvl, bool flagGradMax)
 {
     Eigen::Matrix<float,3,3> R = (invPose.block<3,3>(0,0)).cast<float>() ;
     Eigen::Matrix<float,3,1> t = (invPose.block<3,1>(0,3)).cast<float>() ;

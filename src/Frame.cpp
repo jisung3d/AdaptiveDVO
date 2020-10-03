@@ -13,8 +13,6 @@
 // For fast edge detection using structure forests
 #include <opencv2/ximgproc.hpp>
 
-#define TURN_ON_ADAPTIVE_DVO true
-
 using namespace cv;
 namespace EdgeVO{
 
@@ -166,7 +164,7 @@ Mat Frame::getEdges(int lvl) const
 }
 cv::Mat Frame::getLaplacian(int lvl) const
 {
-    return m_pyramidLaplacian[lvl];
+    return (m_pyramidLaplacian[lvl].clone()).reshape(1, m_pyramidLaplacian[lvl].rows * m_pyramidLaplacian[lvl].cols);
 }
 cv::Mat Frame::getGradientX(int lvl) const
 {
@@ -198,10 +196,13 @@ void Frame::makePyramids()
     // Sobel
     createSobelEdgePyramids();
 #endif
-    createImageGradientPyramids(TURN_ON_ADAPTIVE_DVO);
-    createPyramid(m_pyramidDepth[0], m_pyramidDepth, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
-    
 
+#ifdef ADAPTIVE_DVO_FULL
+    createImageGradientPyramids(true);
+#else
+    createImageGradientPyramids();
+#endif
+    createPyramid(m_pyramidDepth[0], m_pyramidDepth, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
 }
 
 void Frame::createPyramid(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSize, int interpolationFlag)
@@ -229,12 +230,12 @@ void Frame::createImageGradientPyramids(bool flagLaplacian)
     createPyramid(m_pyramid_Idy[0], m_pyramid_Idy, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
 
     if(flagLaplacian){
-        // Ixx, Iyy
-        calcGradientX(m_pyramid_Idx[0], m_pyramid_Idxx[0]);
-        calcGradientY(m_pyramid_Idy[0], m_pyramid_Idyy[0]);
-        // Laplacian
-        m_pyramidLaplacian[0] = m_pyramid_Idxx[0] + m_pyramid_Idyy[0];
-
+        // // Ixx, Iyy
+        // calcGradientX(m_pyramid_Idx[0], m_pyramid_Idxx[0]);
+        // calcGradientY(m_pyramid_Idy[0], m_pyramid_Idyy[0]);
+        // // Laplacian
+        // m_pyramidLaplacian[0] = m_pyramid_Idxx[0] + m_pyramid_Idyy[0];
+        calcLaplacian(m_pyramidImage[0], m_pyramidLaplacian[0]);
         createPyramid(m_pyramidLaplacian[0], m_pyramidLaplacian, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
     }
 }
@@ -288,6 +289,27 @@ void Frame::calcGradientY(cv::Mat& src, cv::Mat& dst)
         }
     }
 }
+void Frame::calcLaplacian(cv::Mat& src, cv::Mat& dst)
+{
+    int ww = src.cols, hh = src.rows;
+    dst = cv::Mat(hh, ww, CV_32FC1, 0.f ).clone();
+    float tLap;
+    for(int j=1; j<hh-1; j++){
+		for(int i=1; i<ww-1; i++){
+
+			// BASIC method.
+			tLap = 8*src.at<float>(j,i);
+			for(int m=-1; m<=1; m++){
+				for(int n=-1; n<=1; n++){
+					if(m == 0 && n == 0) continue;
+					tLap -= src.at<float>(j+m,i+n);
+				}
+			}
+            dst.at<float>(j,i) = tLap/8.0f;
+		}
+	}
+}
+
 void Frame::createCannyEdgePyramids()
 {
     for(size_t i = 0; i < m_pyramidImage.size(); ++i)

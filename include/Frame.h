@@ -41,6 +41,7 @@ class Frame{
         void createPyramid(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSize, int interpolationFlag);
         void calcGradientX(cv::Mat& src, cv::Mat& dst);
         void calcGradientY(cv::Mat& src, cv::Mat& dst);
+        void calcLaplacian(cv::Mat& src, cv::Mat& dst);
 
         int getHeight(int lvl) const;
         int getWidth(int lvl) const;

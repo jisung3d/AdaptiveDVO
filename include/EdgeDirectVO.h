@@ -9,6 +9,8 @@
 #include <Eigen/Core>
 #include <fstream>
 
+#define SQUARE(x) ((x) * (x))
+
 namespace EdgeVO{
 
 class EdgeDirectVO{
@@ -108,9 +110,14 @@ class EdgeDirectVO{
         std::vector<float> m_x;
         std::vector<float> m_y;
 
-        
-
-
+        //////////////////////////////////////////////////////////////////////////
+        // For Adaptive DVO
+        //////////////////////////////////////////////////////////////////////////
+        // for RGB-D test setting.
+	    const float m_th_grad_sq[4] ={SQUARE(1),SQUARE(2),SQUARE(3),SQUARE(4)};
+	    const float m_th_grad_2_sq[4] ={SQUARE(20),SQUARE(30),SQUARE(30),SQUARE(30)};
+	    const float m_th_D_sq[4] ={SQUARE(0.02f),SQUARE(0.03f),SQUARE(0.04f),SQUARE(0.05f)};	
+	    //////////////////////////////////////////////////////////////////////////
 };
 
 }
