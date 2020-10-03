@@ -44,9 +44,9 @@ Frame::Frame(std::string imagePath, std::string depthPath, Sequence* seq)
     m_pyramidLaplacian.resize(EdgeVO::Settings::PYRAMID_DEPTH);
     m_pyramid_Idx.resize(EdgeVO::Settings::PYRAMID_DEPTH);
     m_pyramid_Idy.resize(EdgeVO::Settings::PYRAMID_DEPTH);
-    m_pyramid_Idxx.resize(EdgeVO::Settings::PYRAMID_DEPTH);
-    m_pyramid_Idyy.resize(EdgeVO::Settings::PYRAMID_DEPTH);    
-
+    m_pyramid_gradMag.resize(EdgeVO::Settings::PYRAMID_DEPTH); // for ADVO
+    m_pyramid_Gdx.resize(EdgeVO::Settings::PYRAMID_DEPTH); // for ADVO
+    m_pyramid_Gdy.resize(EdgeVO::Settings::PYRAMID_DEPTH); // for ADVO    
 
     m_pyramidImageUINT[0] = m_image.clone(); 
     m_pyramidImage[0] = m_image;
@@ -84,8 +84,9 @@ void Frame::releaseAllVectors()
     m_pyramidImage.clear();
     m_pyramid_Idx.clear();
     m_pyramid_Idy.clear();
-    m_pyramid_Idxx.clear();
-    m_pyramid_Idyy.clear();
+    m_pyramid_gradMag.clear();
+    m_pyramid_Gdx.clear();
+    m_pyramid_Gdy.clear();
     m_pyramidDepth.clear();
     m_pyramidMask.clear();
     m_pyramidEdge.clear();
@@ -131,13 +132,13 @@ Mat& Frame::getDepthForDisplayOnly()
     return m_pyramidDepth[0];
 }
 
-cv::Mat Frame::getGX(int lvl) const
+cv::Mat Frame::getGdx(int lvl) const
 {
-    return m_pyramid_Idx[lvl];
+    return (m_pyramid_Gdx[lvl].clone()).reshape(1, m_pyramid_Gdx[lvl].rows * m_pyramid_Gdx[lvl].cols);
 }
-cv::Mat Frame::getGY(int lvl) const
+cv::Mat Frame::getGdy(int lvl) const
 {
-    return m_pyramid_Idy[lvl];
+    return (m_pyramid_Gdy[lvl].clone()).reshape(1, m_pyramid_Gdy[lvl].rows * m_pyramid_Gdy[lvl].cols);
 }
 
 Mat Frame::getImage(int lvl) const
@@ -147,6 +148,10 @@ Mat Frame::getImage(int lvl) const
 cv::Mat Frame::getImageVector(int lvl) const
 {
     return (m_pyramidImage[lvl].clone()).reshape(1, m_pyramidImage[lvl].rows * m_pyramidImage[lvl].cols);
+}
+Mat Frame::getGradientMagVector(int lvl) const
+{
+    return (m_pyramid_gradMag[lvl].clone()).reshape(1, m_pyramid_gradMag[lvl].rows * m_pyramid_gradMag[lvl].cols);
 }
 
 Mat Frame::getDepthMap(int lvl) const
@@ -230,30 +235,19 @@ void Frame::createImageGradientPyramids(bool flagLaplacian)
     createPyramid(m_pyramid_Idy[0], m_pyramid_Idy, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
 
     if(flagLaplacian){
-        // // Ixx, Iyy
-        // calcGradientX(m_pyramid_Idx[0], m_pyramid_Idxx[0]);
-        // calcGradientY(m_pyramid_Idy[0], m_pyramid_Idyy[0]);
-        // // Laplacian
-        // m_pyramidLaplacian[0] = m_pyramid_Idxx[0] + m_pyramid_Idyy[0];
+        // gradient magnitude pyramid.
+        //m_pyramid_gradMag[0] = cv::Mat::zeros(m_pyramid_Idx[0].size(), CV_32FC1);
+        m_pyramid_gradMag[0] = m_pyramid_Idx[0].mul(m_pyramid_Idx[0]) + m_pyramid_Idy[0].mul(m_pyramid_Idy[0]);
+        createPyramid(m_pyramid_gradMag[0], m_pyramid_gradMag, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
+        // Ixx, Iyy
+        calcGradientX(m_pyramid_gradMag[0], m_pyramid_Gdx[0]);
+        createPyramid(m_pyramid_Gdx[0], m_pyramid_Gdx, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
+        calcGradientY(m_pyramid_gradMag[0], m_pyramid_Gdy[0]);
+        createPyramid(m_pyramid_Gdy[0], m_pyramid_Gdy, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
+        // Laplacian
+        //m_pyramidLaplacian[0] = m_pyramid_Idxx[0] + m_pyramid_Idyy[0];
         calcLaplacian(m_pyramidImage[0], m_pyramidLaplacian[0]);
         createPyramid(m_pyramidLaplacian[0], m_pyramidLaplacian, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
-    }
-}
-
-void Frame::calcGX(cv::Mat &src)
-{
-    m_GX.resize(src.rows, src.cols);
-    for(int y = 0; y < src.rows; ++y)
-    {
-        for(int x = 0; x < src.cols; ++x)
-        {
-            if(x == 0)
-                m_GX(y,x) = (src.at<float>(y,x+1) - src.at<float>(y,x));
-            else if(x == src.cols-1)
-                m_GX(y,x) = (src.at<float>(y,x) - src.at<float>(y,x-1));
-            else
-                m_GX(y,x) = (src.at<float>(y,x+1) - src.at<float>(y,x-1))*0.5;
-        }
     }
 }
 

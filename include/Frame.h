@@ -26,17 +26,18 @@ class Frame{
         //For cleanup
         void releaseAllVectors();
         //For calculations
-        cv::Mat getImage(int lvl) const;
+        cv::Mat getImage(int lvl) const;        
         cv::Mat getDepthMap(int lvl) const;
         cv::Mat getMask(int lvl) const;
         cv::Mat getEdges(int lvl) const;
         cv::Mat getLaplacian(int lvl) const;
         cv::Mat getGradientX(int lvl) const;
         cv::Mat getGradientY(int lvl) const;
-        void calcGX(cv::Mat &src);
-        cv::Mat getGX(int lvl) const;
-        cv::Mat getGY(int lvl) const;
         cv::Mat getImageVector(int lvl) const;
+        
+        cv::Mat getGradientMagVector(int lvl) const;
+        cv::Mat getGdx(int lvl) const;
+        cv::Mat getGdy(int lvl) const;
 
         void createPyramid(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSize, int interpolationFlag);
         void calcGradientX(cv::Mat& src, cv::Mat& dst);
@@ -77,7 +78,8 @@ class Frame{
         //std::vector<cv::Mat> m_pyramidImageFloat;
         std::vector<cv::Mat> m_pyramid_Idx;
         std::vector<cv::Mat> m_pyramid_Idy;
-        std::vector<cv::Mat> m_pyramid_Idxx, m_pyramid_Idyy;
+        std::vector<cv::Mat> m_pyramid_gradMag; // G
+        std::vector<cv::Mat> m_pyramid_Gdx, m_pyramid_Gdy;
         std::vector<cv::Mat> m_pyramidLaplacian;
         std::vector<cv::Mat> m_pyramidEdge;
         std::vector<cv::Mat> m_pyramidDepth;

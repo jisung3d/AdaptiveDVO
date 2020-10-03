@@ -23,7 +23,7 @@ class EdgeDirectVO{
         // Main Algorithm //
         void runEdgeDirectVO();
         void solveSystemOfEquations(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate);
-        void runAdaptiveDirectVO();
+        //void runAdaptiveDirectVO();
         void solveSystemOfEquationsForADVO(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate);
         // Helper Algorithms //
         void prepareVectors(int lvl);
@@ -55,6 +55,11 @@ class EdgeDirectVO{
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_im2Final;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_residual;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_rsquared;
+
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_grad1;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_grad2;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_grad1Final;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_grad2Final;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_residual_grad;  // for ADVO
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_rsquared_grad;  // for ADVO
         // Matrices and vectors for solving Least Squares problem
@@ -89,7 +94,7 @@ class EdgeDirectVO{
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_gyFinal;
         
         // Vectors of Image Laplacians
-        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_G;  // for ADVO
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_L;  // for ADVO
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_Gx;  // for ADVO
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_Gy;  // for ADVO
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_GxFinal;  // for ADVO

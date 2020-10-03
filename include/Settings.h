@@ -23,8 +23,8 @@ namespace EdgeVO{
         //#define REGULAR_DIRECT_VO_SUBSET true
         //#define EDGEVO_FULL true
         //#define EDGEVO_SUBSET_POINTS true        
-        //#define ADAPTIVE_DVO_FULL true
-        #define ADAPTIVE_DVO_WITHOUT_GRAD true
+        #define ADAPTIVE_DVO_FULL true
+        //#define ADAPTIVE_DVO_WITHOUT_GRAD true
 
         const double PERCENT_EDGES = 0.85;
 

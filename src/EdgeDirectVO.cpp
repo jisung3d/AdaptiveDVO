@@ -50,7 +50,7 @@ EdgeDirectVO::EdgeDirectVO()
     m_Z.resize(length);
     m_edgeMask.resize(length);
     
-    m_G.resize(length);  // for ADVO
+    m_L.resize(length);  // for ADVO
     m_Gx.resize(length);  // for ADVO
     m_Gy.resize(length);  // for ADVO
     m_GxFinal.resize(length);  // for ADVO
@@ -89,174 +89,174 @@ EdgeDirectVO& EdgeDirectVO::operator=(const EdgeDirectVO& rhs)
 
 }
 
-void EdgeDirectVO::runAdaptiveDirectVO()
-{
-#ifdef DISPLAY_LOGS
-    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
-#endif
+// void EdgeDirectVO::runAdaptiveDirectVO()
+// {
+// #ifdef DISPLAY_LOGS
+//     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+// #endif
 
-    //Start timer for stats
-    m_statistics.start();
+//     //Start timer for stats
+//     m_statistics.start();
 
-    //Make Pyramid for Reference frame
-    m_sequence.makeReferenceFramePyramids();
+//     //Make Pyramid for Reference frame
+//     m_sequence.makeReferenceFramePyramids();
 
-    // Run for entire sequence
-    //Prepare some vectors
-    prepare3DPoints();
+//     // Run for entire sequence
+//     //Prepare some vectors
+//     prepare3DPoints();
 
-    //Init camera_pose with ground truth trajectory to make comparison easy
-    Pose camera_pose = m_trajectory.initializePoseToGroundTruth(m_sequence.getFirstTimeStamp());
-    Pose keyframe_pose = camera_pose;
-    // relative_pose intiialized to identity matrix
-    Pose relative_pose;
+//     //Init camera_pose with ground truth trajectory to make comparison easy
+//     Pose camera_pose = m_trajectory.initializePoseToGroundTruth(m_sequence.getFirstTimeStamp());
+//     Pose keyframe_pose = camera_pose;
+//     // relative_pose intiialized to identity matrix
+//     Pose relative_pose;
 
-    // Start clock timer
-    outputPose(camera_pose, m_sequence.getFirstTimeStamp());
-    m_statistics.addStartTime((float) EdgeVO::CycleTimer::currentSeconds());
+//     // Start clock timer
+//     outputPose(camera_pose, m_sequence.getFirstTimeStamp());
+//     m_statistics.addStartTime((float) EdgeVO::CycleTimer::currentSeconds());
 
-    for (size_t n = 0; m_sequence.sequenceNotFinished(); ++n)
-    {
-        std::cout << std::endl << camera_pose << std::endl;
+//     for (size_t n = 0; m_sequence.sequenceNotFinished(); ++n)
+//     {
+//         std::cout << std::endl << camera_pose << std::endl;
 
-#ifdef DISPLAY_SEQUENCE
-        //We re-use current frame for reference frame info
-        m_sequence.makeCurrentFramePyramids();
+// #ifdef DISPLAY_SEQUENCE
+//         //We re-use current frame for reference frame info
+//         m_sequence.makeCurrentFramePyramids();
 
-        //Display images
-        int keyPressed1 = m_sequence.displayCurrentImage();
-        int keyPressed2 = m_sequence.displayCurrentEdge();
-        int keyPressed3 = m_sequence.displayCurrentDepth();
-        if(keyPressed1 == EdgeVO::Settings::TERMINATE_DISPLAY_KEY 
-            || keyPressed2 == EdgeVO::Settings::TERMINATE_DISPLAY_KEY
-            || keyPressed3 == EdgeVO::Settings::TERMINATE_DISPLAY_KEY) 
-        {
-            terminationRequested();
-            break;
-        }
-        //Start algorithm timer for each iteration
-        float startTime = (float) EdgeVO::CycleTimer::currentSeconds();
-#else
-        //Start algorithm timer for each iteration
-        float startTime = (float) EdgeVO::CycleTimer::currentSeconds();
-        m_sequence.makeCurrentFramePyramids();
-#endif //DISPLAY_SEQUENCE
+//         //Display images
+//         int keyPressed1 = m_sequence.displayCurrentImage();
+//         int keyPressed2 = m_sequence.displayCurrentEdge();
+//         int keyPressed3 = m_sequence.displayCurrentDepth();
+//         if(keyPressed1 == EdgeVO::Settings::TERMINATE_DISPLAY_KEY 
+//             || keyPressed2 == EdgeVO::Settings::TERMINATE_DISPLAY_KEY
+//             || keyPressed3 == EdgeVO::Settings::TERMINATE_DISPLAY_KEY) 
+//         {
+//             terminationRequested();
+//             break;
+//         }
+//         //Start algorithm timer for each iteration
+//         float startTime = (float) EdgeVO::CycleTimer::currentSeconds();
+// #else
+//         //Start algorithm timer for each iteration
+//         float startTime = (float) EdgeVO::CycleTimer::currentSeconds();
+//         m_sequence.makeCurrentFramePyramids();
+// #endif //DISPLAY_SEQUENCE
 
-        if( n % EdgeVO::Settings::KEYFRAME_INTERVAL == 0 )
-        {
-            keyframe_pose = camera_pose;
-            relative_pose.setIdentityPose();
-        }
+//         if( n % EdgeVO::Settings::KEYFRAME_INTERVAL == 0 )
+//         {
+//             keyframe_pose = camera_pose;
+//             relative_pose.setIdentityPose();
+//         }
 
-        //Constant motion assumption
-#ifdef DISPLAY_LOGS
-        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - updateKeyFramePose" << std::endl;
-#endif
-        relative_pose.updateKeyFramePose(relative_pose.getPoseMatrix(), m_trajectory.getLastRelativePose());
-#ifdef DISPLAY_LOGS
-        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - setPose" << std::endl;
-#endif
-        relative_pose.setPose(se3ExpEigen(se3LogEigen(relative_pose.getPoseMatrix())));
+//         //Constant motion assumption
+// #ifdef DISPLAY_LOGS
+//         std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - updateKeyFramePose" << std::endl;
+// #endif
+//         relative_pose.updateKeyFramePose(relative_pose.getPoseMatrix(), m_trajectory.getLastRelativePose());
+// #ifdef DISPLAY_LOGS
+//         std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - setPose" << std::endl;
+// #endif
+//         relative_pose.setPose(se3ExpEigen(se3LogEigen(relative_pose.getPoseMatrix())));
 
-        //Constant acc. assumption
-        //relative_pose.updateKeyFramePose(relative_pose.getPoseMatrix(), m_trajectory.get2LastRelativePose());
-        //relative_pose.setPose(se3ExpEigen(se3LogEigen(relative_pose.getPoseMatrix())));
+//         //Constant acc. assumption
+//         //relative_pose.updateKeyFramePose(relative_pose.getPoseMatrix(), m_trajectory.get2LastRelativePose());
+//         //relative_pose.setPose(se3ExpEigen(se3LogEigen(relative_pose.getPoseMatrix())));
         
-        // For each image pyramid level, starting at the top, going down
-        for (int lvl = getTopPyramidLevel(); lvl >= getBottomPyramidLevel(); --lvl)
-        {
-#ifdef DISPLAY_LOGS
-            std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - prepareVectors" << std::endl;
-#endif
-            const Mat cameraMatrix(m_sequence.getCameraMatrix(lvl));
-            prepareVectors(lvl);
+//         // For each image pyramid level, starting at the top, going down
+//         for (int lvl = getTopPyramidLevel(); lvl >= getBottomPyramidLevel(); --lvl)
+//         {
+// #ifdef DISPLAY_LOGS
+//             std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - prepareVectors" << std::endl;
+// #endif
+//             const Mat cameraMatrix(m_sequence.getCameraMatrix(lvl));
+//             prepareVectors(lvl);
             
-            //make3DPoints(cameraMatrix, lvl);            
+//             //make3DPoints(cameraMatrix, lvl);            
 
-            float lambda = 0.f;
-            float error_last = EdgeVO::Settings::INF_F;
-            float error = error_last;
-            for(int i = 0; i < EdgeVO::Settings::MAX_ITERATIONS_PER_PYRAMID[ lvl ]; ++i)
-            {
-#ifdef DISPLAY_LOGS
-                std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - warpAndProject" << std::endl;
-#endif
-                error_last = error;
-                error = warpAndProject(relative_pose.inversePoseEigen(), lvl);
+//             float lambda = 0.f;
+//             float error_last = EdgeVO::Settings::INF_F;
+//             float error = error_last;
+//             for(int i = 0; i < EdgeVO::Settings::MAX_ITERATIONS_PER_PYRAMID[ lvl ]; ++i)
+//             {
+// #ifdef DISPLAY_LOGS
+//                 std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - warpAndProject" << std::endl;
+// #endif
+//                 error_last = error;
+//                 error = warpAndProject(relative_pose.inversePoseEigen(), lvl);
 
-                ///////////////////////////////////////////////////////////////////////////
-                // This part should be changed to test another Loss functions.
-                ///////////////////////////////////////////////////////////////////////////
-                // Levenberg-Marquardt
-                if( error < error_last)
-                {
-                    // Update relative pose
-                    Eigen::Matrix<double, 6 , Eigen::RowMajor> del;
-                    solveSystemOfEquations(lambda, lvl, del);
-                    //std::cout << del << std::endl;
+//                 ///////////////////////////////////////////////////////////////////////////
+//                 // This part should be changed to test another Loss functions.
+//                 ///////////////////////////////////////////////////////////////////////////
+//                 // Levenberg-Marquardt
+//                 if( error < error_last)
+//                 {
+//                     // Update relative pose
+//                     Eigen::Matrix<double, 6 , Eigen::RowMajor> del;
+//                     solveSystemOfEquations(lambda, lvl, del);
+//                     //std::cout << del << std::endl;
                     
-                    if( (del.segment<3>(0)).dot(del.segment<3>(0)) < EdgeVO::Settings::MIN_TRANSLATION_UPDATE & 
-                        (del.segment<3>(3)).dot(del.segment<3>(3)) < EdgeVO::Settings::MIN_ROTATION_UPDATE    )
-                        break;
+//                     if( (del.segment<3>(0)).dot(del.segment<3>(0)) < EdgeVO::Settings::MIN_TRANSLATION_UPDATE & 
+//                         (del.segment<3>(3)).dot(del.segment<3>(3)) < EdgeVO::Settings::MIN_ROTATION_UPDATE    )
+//                         break;
 
-                    cv::Mat delMat = se3ExpEigen(del);
-                    relative_pose.updatePose( delMat );
+//                     cv::Mat delMat = se3ExpEigen(del);
+//                     relative_pose.updatePose( delMat );
 
-                    //Update lambda
-                    if(lambda <= EdgeVO::Settings::LAMBDA_MAX)
-                        lambda = EdgeVO::Settings::LAMBDA_MIN;
-                    else
-                        lambda *= EdgeVO::Settings::LAMBDA_UPDATE_FACTOR;
-                }
-                else
-                {
-                    if(lambda == EdgeVO::Settings::LAMBDA_MIN)
-                        lambda = EdgeVO::Settings::LAMBDA_MAX;
-                    else
-                        lambda *= EdgeVO::Settings::LAMBDA_UPDATE_FACTOR;
-                }
-                ///////////////////////////////////////////////////////////////////////////
-            }
-        }
+//                     //Update lambda
+//                     if(lambda <= EdgeVO::Settings::LAMBDA_MAX)
+//                         lambda = EdgeVO::Settings::LAMBDA_MIN;
+//                     else
+//                         lambda *= EdgeVO::Settings::LAMBDA_UPDATE_FACTOR;
+//                 }
+//                 else
+//                 {
+//                     if(lambda == EdgeVO::Settings::LAMBDA_MIN)
+//                         lambda = EdgeVO::Settings::LAMBDA_MAX;
+//                     else
+//                         lambda *= EdgeVO::Settings::LAMBDA_UPDATE_FACTOR;
+//                 }
+//                 ///////////////////////////////////////////////////////////////////////////
+//             }
+//         }
 
-#ifdef DISPLAY_LOGS
-        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - updateKeyFramePose" << std::endl;
-#endif
-        camera_pose.updateKeyFramePose(keyframe_pose.getPoseMatrix(), relative_pose.getPoseMatrix());
-#ifdef DISPLAY_LOGS
-        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - outputPose" << std::endl;
-#endif
-        outputPose(camera_pose, m_sequence.getCurrentTimeStamp());
-        //At end, update sequence for next image pair
-        float endTime = (float) EdgeVO::CycleTimer::currentSeconds();
-        m_trajectory.addPose(camera_pose);
+// #ifdef DISPLAY_LOGS
+//         std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - updateKeyFramePose" << std::endl;
+// #endif
+//         camera_pose.updateKeyFramePose(keyframe_pose.getPoseMatrix(), relative_pose.getPoseMatrix());
+// #ifdef DISPLAY_LOGS
+//         std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - outputPose" << std::endl;
+// #endif
+//         outputPose(camera_pose, m_sequence.getCurrentTimeStamp());
+//         //At end, update sequence for next image pair
+//         float endTime = (float) EdgeVO::CycleTimer::currentSeconds();
+//         m_trajectory.addPose(camera_pose);
 
-        // Don't time past this part (reading from disk)
-#ifdef DISPLAY_LOGS                
-        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - addDurationForFrame" << std::endl;
-#endif
-        m_statistics.addDurationForFrame(startTime, endTime);
-        m_statistics.addCurrentTime((float) EdgeVO::CycleTimer::currentSeconds());
-#ifdef DISPLAY_LOGS                
-        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - printStatistics - E" << std::endl;
-#endif
-        m_statistics.printStatistics();
-#ifdef DISPLAY_LOGS                
-        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - advanceSequence - E" << std::endl;
-#endif
-        if(!m_sequence.advanceSequence()) break;
-#ifdef DISPLAY_LOGS                
-        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - advanceSequence - X" << std::endl;
-#endif
-    }
-    // End algorithm level timer
-    m_statistics.end();
-#ifdef DISPLAY_LOGS
-    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
-#endif
+//         // Don't time past this part (reading from disk)
+// #ifdef DISPLAY_LOGS                
+//         std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - addDurationForFrame" << std::endl;
+// #endif
+//         m_statistics.addDurationForFrame(startTime, endTime);
+//         m_statistics.addCurrentTime((float) EdgeVO::CycleTimer::currentSeconds());
+// #ifdef DISPLAY_LOGS                
+//         std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - printStatistics - E" << std::endl;
+// #endif
+//         m_statistics.printStatistics();
+// #ifdef DISPLAY_LOGS                
+//         std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - advanceSequence - E" << std::endl;
+// #endif
+//         if(!m_sequence.advanceSequence()) break;
+// #ifdef DISPLAY_LOGS                
+//         std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - advanceSequence - X" << std::endl;
+// #endif
+//     }
+//     // End algorithm level timer
+//     m_statistics.end();
+// #ifdef DISPLAY_LOGS
+//     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+// #endif
 
-    return;
-}
+//     return;
+// }
 
 void EdgeDirectVO::runEdgeDirectVO()
 {
@@ -351,7 +351,11 @@ void EdgeDirectVO::runEdgeDirectVO()
                 std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - warpAndProject" << std::endl;
 #endif
                 error_last = error;
+#ifdef ADAPTIVE_DVO_FULL                
+                error = warpAndProject(relative_pose.inversePoseEigen(), lvl, true);
+#else
                 error = warpAndProject(relative_pose.inversePoseEigen(), lvl);
+#endif
 
                 ///////////////////////////////////////////////////////////////////////////
                 // This part should be changed to test another Loss functions.
@@ -441,7 +445,11 @@ void EdgeDirectVO::prepareVectors(int lvl)
     cv2eigen(m_sequence.getReferenceFrame()->getDepthMap(lvl), m_Z);
 
 #ifdef ADAPTIVE_DVO_FULL
-    cv2eigen(m_sequence.getCurrentFrame()->getLaplacian(lvl), m_G);
+    cv2eigen(m_sequence.getReferenceFrame()->getGradientMagVector(lvl), m_grad1);
+    cv2eigen(m_sequence.getCurrentFrame()->getGradientMagVector(lvl), m_grad2);
+    cv2eigen(m_sequence.getCurrentFrame()->getGdx(lvl), m_Gx);
+    cv2eigen(m_sequence.getCurrentFrame()->getGdy(lvl), m_Gy);
+    cv2eigen(m_sequence.getCurrentFrame()->getLaplacian(lvl), m_L);
 #endif
     
     size_t numElements;
@@ -516,29 +524,28 @@ void EdgeDirectVO::prepareVectors(int lvl)
     m_ZFinal.resize(numElements);
     m_X3D.resize(numElements ,Eigen::NoChange);
     m_finalMask.resize(numElements);
+
+    m_grad1Final.resize(numElements);
     m_finalMaskGrad.resize(numElements);
+
     size_t idx = 0;    
     for(int i = 0; i < m_edgeMask.rows(); ++i)
     {
         if(m_edgeMask[i] != 0)
         {
-            // check gradient magnitude.
-            float mag_grad = SQUARE(m_gx[i]) + SQUARE(m_gy[i]);
-#ifdef DISPLAY_LOGS
-            std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - mag_grad: " 
-            << mag_grad << " (th: " << m_th_grad_sq[lvl] << ")" << std::endl;
-#endif         
             m_im1Final[idx] = m_im1[i];
             m_ZFinal[idx] = m_Z[i];
             m_X3D.row(idx) = (m_X3DVector[lvl].row(i)).array() * m_Z[i];
             
             m_finalMask[idx] = m_edgeMask[i];                
             // check gradient-Laplarcian ratio
-            float GLR_sq = SQUARE(m_G[i]);
+            float GLR_sq = SQUARE(m_L[i]);
             if(GLR_sq > m_th_grad_2_sq[lvl]){
+                m_grad1Final[idx] = m_grad1[i];
                 m_finalMaskGrad[idx] = m_edgeMask[i];
             }
             else{
+                m_grad1Final[idx] = 0.0f;
                 m_finalMaskGrad[idx] = (unsigned char)0;
             }                
             ++idx;
@@ -638,48 +645,45 @@ float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int
     //m_finalMask = m_edgeMask;
 
     // for Edge DVO
-    if(!flagGradMax){ 
-        m_finalMask = m_edgeMask;
+    m_finalMask = m_edgeMask;
 
-        m_finalMask = (m_newX3D.row(2).transpose().array() <= 0.f).select(0, m_finalMask);
-        //m_finalMask = (m_newX3D.row(2).transpose().array() > EdgeVO::Settings::MAX_Z_DEPTH).select(0, m_finalMask);
+    m_finalMask = (m_newX3D.row(2).transpose().array() <= 0.f).select(0, m_finalMask);
+    //m_finalMask = (m_newX3D.row(2).transpose().array() > EdgeVO::Settings::MAX_Z_DEPTH).select(0, m_finalMask);
 
-        //m_finalMask = (m_newX3D.row(2).transpose().array() > 10.f).select(0, m_finalMask);
-        m_finalMask = (m_X3D.col(2).array() <= 0.f).select(0, m_finalMask);
-        //m_finalMask = (m_X3D.col(2).array() > 10.f).select(0, m_finalMask);
-        m_finalMask = ( (m_X3D.col(2).array()).isFinite() ).select(m_finalMask, 0);
-        m_finalMask = ( (m_newX3D.row(2).transpose().array()).isFinite() ).select(m_finalMask, 0);
-        
-        // Check new projected x coordinates are: 0 <= x < w-1
-        m_finalMask = (m_warpedX.array() < 0.f).select(0, m_finalMask);
-        m_finalMask = (m_warpedX.array() >= w-2).select(0, m_finalMask);
-        m_finalMask = (m_warpedX.array().isFinite()).select(m_finalMask, 0);
-        // Check new projected x coordinates are: 0 <= y < h-1
-        m_finalMask = (m_warpedY.array() >= h-2).select(0, m_finalMask);
-        m_finalMask = (m_warpedY.array() < 0.f).select(0, m_finalMask);
-        m_finalMask = (m_warpedY.array().isFinite()).select(m_finalMask, 0);
-    }
+    //m_finalMask = (m_newX3D.row(2).transpose().array() > 10.f).select(0, m_finalMask);
+    m_finalMask = (m_X3D.col(2).array() <= 0.f).select(0, m_finalMask);
+    //m_finalMask = (m_X3D.col(2).array() > 10.f).select(0, m_finalMask);
+    m_finalMask = ( (m_X3D.col(2).array()).isFinite() ).select(m_finalMask, 0);
+    m_finalMask = ( (m_newX3D.row(2).transpose().array()).isFinite() ).select(m_finalMask, 0);
+    
+    // Check new projected x coordinates are: 0 <= x < w-1
+    m_finalMask = (m_warpedX.array() < 0.f).select(0, m_finalMask);
+    m_finalMask = (m_warpedX.array() >= w-2).select(0, m_finalMask);
+    m_finalMask = (m_warpedX.array().isFinite()).select(m_finalMask, 0);
+    // Check new projected x coordinates are: 0 <= y < h-1
+    m_finalMask = (m_warpedY.array() >= h-2).select(0, m_finalMask);
+    m_finalMask = (m_warpedY.array() < 0.f).select(0, m_finalMask);
+    m_finalMask = (m_warpedY.array().isFinite()).select(m_finalMask, 0);
+    
     // for Adaptive DVO
-    else{
-        m_finalMask = m_edgeMask;
-
-        m_finalMask = (m_newX3D.row(2).transpose().array() <= 0.f).select(0, m_finalMask);
+    if(flagGradMax){
+        m_finalMaskGrad = (m_newX3D.row(2).transpose().array() <= 0.f).select(0, m_finalMaskGrad);
         //m_finalMask = (m_newX3D.row(2).transpose().array() > EdgeVO::Settings::MAX_Z_DEPTH).select(0, m_finalMask);
 
         //m_finalMask = (m_newX3D.row(2).transpose().array() > 10.f).select(0, m_finalMask);
-        m_finalMask = (m_X3D.col(2).array() <= 0.f).select(0, m_finalMask);
+        m_finalMaskGrad = (m_X3D.col(2).array() <= 0.f).select(0, m_finalMaskGrad);
         //m_finalMask = (m_X3D.col(2).array() > 10.f).select(0, m_finalMask);
-        m_finalMask = ( (m_X3D.col(2).array()).isFinite() ).select(m_finalMask, 0);
-        m_finalMask = ( (m_newX3D.row(2).transpose().array()).isFinite() ).select(m_finalMask, 0);
+        m_finalMaskGrad = ( (m_X3D.col(2).array()).isFinite() ).select(m_finalMaskGrad, 0);
+        m_finalMaskGrad = ( (m_newX3D.row(2).transpose().array()).isFinite() ).select(m_finalMaskGrad, 0);
         
         // Check new projected x coordinates are: 0 <= x < w-1
-        m_finalMask = (m_warpedX.array() < 0.f).select(0, m_finalMask);
-        m_finalMask = (m_warpedX.array() >= w-2).select(0, m_finalMask);
-        m_finalMask = (m_warpedX.array().isFinite()).select(m_finalMask, 0);
+        m_finalMaskGrad = (m_warpedX.array() < 0.f).select(0, m_finalMaskGrad);
+        m_finalMaskGrad = (m_warpedX.array() >= w-2).select(0, m_finalMaskGrad);
+        m_finalMaskGrad = (m_warpedX.array().isFinite()).select(m_finalMaskGrad, 0);
         // Check new projected x coordinates are: 0 <= y < h-1
-        m_finalMask = (m_warpedY.array() >= h-2).select(0, m_finalMask);
-        m_finalMask = (m_warpedY.array() < 0.f).select(0, m_finalMask);
-        m_finalMask = (m_warpedY.array().isFinite()).select(m_finalMask, 0);
+        m_finalMaskGrad = (m_warpedY.array() >= h-2).select(0, m_finalMaskGrad);
+        m_finalMaskGrad = (m_warpedY.array() < 0.f).select(0, m_finalMaskGrad);
+        m_finalMaskGrad = (m_warpedY.array().isFinite()).select(m_finalMaskGrad, 0);
     }
     
 
@@ -738,14 +742,25 @@ float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int
     {
         if(m_finalMask[i] != 0)
         {
-            m_gxFinal[idx]  = interpolateVector( m_gx, m_warpedX[i], m_warpedY[i], w);
-            m_gyFinal[idx]  = interpolateVector( m_gy, m_warpedX[i], m_warpedY[i], w);
-            m_im1[idx] = m_im1Final[i];//interpolateVector(m_im1, m_warpedX[i], m_warpedY[i], w);
-            m_im2Final[idx] = interpolateVector(m_im2, m_warpedX[i], m_warpedY[i], w);
+            // gradient loss            
+            if(flagGradMax && m_finalMaskGrad[i] != 0){
+                m_gxFinal[idx]  = interpolateVector( m_Gx, m_warpedX[i], m_warpedY[i], w);
+                m_gyFinal[idx]  = interpolateVector( m_Gy, m_warpedX[i], m_warpedY[i], w);
+                m_im1[idx] = m_grad1Final[i];//interpolateVector(m_im1, m_warpedX[i], m_warpedY[i], w);
+                m_im2Final[idx] = interpolateVector(m_grad2, m_warpedX[i], m_warpedY[i], w);
+            }
+            // photometric loss
+            else{
+                m_gxFinal[idx]  = interpolateVector( m_gx, m_warpedX[i], m_warpedY[i], w);
+                m_gyFinal[idx]  = interpolateVector( m_gy, m_warpedX[i], m_warpedY[i], w);
+                m_im1[idx] = m_im1Final[i];//interpolateVector(m_im1, m_warpedX[i], m_warpedY[i], w);
+                m_im2Final[idx] = interpolateVector(m_im2, m_warpedX[i], m_warpedY[i], w);
+            }
+            
             m_XFinal[idx] = m_newX3D(0,i);
             m_YFinal[idx] = m_newX3D(1,i);
             m_ZFinal[idx] = m_newX3D(2,i);
-            
+
             ++idx;
         }
     }
