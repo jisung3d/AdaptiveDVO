@@ -466,8 +466,12 @@ void EdgeDirectVO::prepareVectors(int lvl)
     m_edgeMask = (m_edgeMask.array() == 0).select(1, m_edgeMask);
     m_edgeMask = (m_Z.array() <= 0.f).select(0, m_edgeMask);
 #elif ADAPTIVE_DVO_FULL | ADAPTIVE_DVO_WITHOUT_GRAD
-    m_edgeMask = (m_Z.array() <= 0.f).select(0, m_edgeMask);
+    // Use all pixels.    
+    // m_edgeMask = (m_gx.array()*m_gx.array() + m_gy.array()*m_gy.array() <= m_th_grad_sq[lvl]).select(0, m_edgeMask);
+    // m_edgeMask = (m_gx.array()*m_gx.array() + m_gy.array()*m_gy.array() > m_th_grad_sq[lvl]).select(1, m_edgeMask);
+    // Use edge pixels only.
     m_edgeMask = (m_gx.array()*m_gx.array() + m_gy.array()*m_gy.array() <= m_th_grad_sq[lvl]).select(0, m_edgeMask);
+    m_edgeMask = (m_Z.array() <= 0.f).select(0, m_edgeMask);
 #else
     m_edgeMask = (m_Z.array() <= 0.f).select(0, m_edgeMask);
     //m_edgeMask = (m_Z.array() <= 0.f).select(0, m_edgeMask);
@@ -604,10 +608,13 @@ void EdgeDirectVO::make3DPoints(const cv::Mat& cameraMatrix, int lvl)
     m_X3D = m_X3DVector[lvl].array() * m_Z.replicate(1, m_X3DVector[lvl].cols() ).array();
 }
 /////////////////////////////////////////////////////////////////////////////////////
-// TO DO LIST 2020.10.03.
-// TO DO LIST 2020.10.03.
-// TO DO LIST 2020.10.03.
-// TO DO LIST 2020.10.03.
+// TO DO LIST 2021.04.06.
+// Iterative Weighted Least Square (IWLS) Problem for joint optimization.
+// 0. Initialize Validity Maps based on RGB and Depth gradient values.
+// 1. Photoconsistency Maximization
+// 2. Gradient difference minimization
+// 3. Point-to-Plane distance minimization
+// TO DO LIST 2021.04.06.
 /////////////////////////////////////////////////////////////////////////////////////
 float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int lvl, bool flagGradMax)
 {

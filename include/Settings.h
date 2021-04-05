@@ -28,7 +28,7 @@ namespace EdgeVO{
 
         const double PERCENT_EDGES = 0.85;
 
-        //const int NUMBER_POINTS = 50;
+        const int NUMBER_POINTS = 50;
         
         //#define EDGEVO_SUBSET_POINTS_EXACT true     //For only using a subset of points, uncomment this
 
