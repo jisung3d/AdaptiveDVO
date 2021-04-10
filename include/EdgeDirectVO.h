@@ -80,9 +80,9 @@ class EdgeDirectVO{
         // Vector of 3D points and Transformed 3D points
         std::vector<Eigen::Matrix<float, Eigen::Dynamic, 3, Eigen::RowMajor>> m_X3DVector;
         Eigen::Matrix<float, Eigen::Dynamic, 3, Eigen::RowMajor> m_X3D;
-
-
         Eigen::Matrix<float, 3, Eigen::Dynamic, Eigen::RowMajor> m_newX3D;
+        std::vector<Eigen::Matrix<float, Eigen::Dynamic, 3, Eigen::RowMajor>> m_normalVector; // for ADVO
+        Eigen::Matrix<float, 3, Eigen::Dynamic, Eigen::RowMajor> m_normal;  // for ADVO
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_XFinal;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_YFinal;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_ZFinal;

@@ -47,6 +47,8 @@ Frame::Frame(std::string imagePath, std::string depthPath, Sequence* seq)
     m_pyramid_gradMag.resize(EdgeVO::Settings::PYRAMID_DEPTH); // for ADVO
     m_pyramid_Gdx.resize(EdgeVO::Settings::PYRAMID_DEPTH); // for ADVO
     m_pyramid_Gdy.resize(EdgeVO::Settings::PYRAMID_DEPTH); // for ADVO    
+    m_pyramidX3D.resize(EdgeVO::Settings::PYRAMID_DEPTH);  // for ADVO
+    m_pyramidNormal.resize(EdgeVO::Settings::PYRAMID_DEPTH); // for ADVO
 
     m_pyramidImageUINT[0] = m_image.clone(); 
     m_pyramidImage[0] = m_image;
@@ -208,6 +210,11 @@ void Frame::makePyramids()
     createImageGradientPyramids();
 #endif
     createPyramid(m_pyramidDepth[0], m_pyramidDepth, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
+
+    ///////////////////////////////////////////////
+    // To Do list at 2021.04.11.
+    // create pyramids of X3D and normals.
+    ///////////////////////////////////////////////
 }
 
 void Frame::createPyramid(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSize, int interpolationFlag)

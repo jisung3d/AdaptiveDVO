@@ -187,6 +187,7 @@ bool Sequence::advanceSequence()
 {
     ++m_currentIndex;
     ++m_referenceIndex;
+    // Change reference frame every 3 frames.
     if (m_referenceIndex % EdgeVO::Settings::KEYFRAME_INTERVAL == 0)
     {
         if(m_reference != nullptr) delete m_reference;

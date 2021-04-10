@@ -32,10 +32,14 @@ EdgeDirectVO::EdgeDirectVO()
 #endif
     int length = m_sequence.getFrameHeight( getBottomPyramidLevel() ) * m_sequence.getFrameWidth( getBottomPyramidLevel() );
     m_X3DVector.resize(EdgeVO::Settings::PYRAMID_DEPTH); // Vector for each pyramid level
-    for(size_t i = 0; i < m_X3DVector.size(); ++i)
+    m_normalVector.resize(EdgeVO::Settings::PYRAMID_DEPTH); // Vector for each pyramid level
+    for(size_t i = 0; i < m_X3DVector.size(); ++i){
         m_X3DVector[i].resize(length / std::pow(4, i) , Eigen::NoChange); //3 Vector for each pyramid for each image pixel
+        m_normalVector[i].resize(length / std::pow(4, i) , Eigen::NoChange); //3 Vector for each pyramid for each image pixel
+    }
 
     m_X3D.resize(length, Eigen::NoChange);
+    m_normal.resize(length, Eigen::NoChange); // for ADVO
     m_warpedX.resize(length);
     m_warpedY.resize(length);
     m_warpedZ.resize(length);
@@ -417,7 +421,10 @@ void EdgeDirectVO::runEdgeDirectVO()
 #ifdef DISPLAY_LOGS                
         std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - advanceSequence - E" << std::endl;
 #endif
+        //////////////////////////////////////////////////////////////////////////
+        // Update frame indices and reference frame (every 3 frames).
         if(!m_sequence.advanceSequence()) break;
+        //////////////////////////////////////////////////////////////////////////
 #ifdef DISPLAY_LOGS                
         std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - advanceSequence - X" << std::endl;
 #endif
@@ -527,6 +534,7 @@ void EdgeDirectVO::prepareVectors(int lvl)
     m_YFinal.resize(numElements);
     m_ZFinal.resize(numElements);
     m_X3D.resize(numElements ,Eigen::NoChange);
+    m_normal.resize(numElements ,Eigen::NoChange);
     m_finalMask.resize(numElements);
 
     m_grad1Final.resize(numElements);
@@ -624,7 +632,7 @@ float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int
     //std::cout << "Cols: " << m_X3D[lvl].cols() << "Rows: " << m_X3D[lvl].rows() << std::endl;
     
     m_newX3D.resize(Eigen::NoChange, m_X3D.rows());
-    m_newX3D = R * m_X3D.transpose() + t.replicate(1, m_X3D.rows() );
+    m_newX3D = R * m_X3D.transpose() + t.replicate(1, m_X3D.rows() ); // transform X3D of current frame to the reference camera coordinates.
 
     const Mat cameraMatrix(m_sequence.getCameraMatrix(lvl));
     const float fx = cameraMatrix.at<float>(0, 0);
@@ -639,9 +647,9 @@ float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int
     m_warpedX.resize(m_X3D.rows());
     m_warpedY.resize(m_X3D.rows());
 
-    m_warpedX = (fx * (m_newX3D.row(0)).array() / (m_newX3D.row(2)).array() ) + cx;
+    m_warpedX = (fx * (m_newX3D.row(0)).array() / (m_newX3D.row(2)).array() ) + cx; // x positon of the re-projected X3D on the reference frame.
     //m_warpedX.array() += cx;
-    m_warpedY = (fy * (m_newX3D.row(1)).array() / (m_newX3D.row(2)).array() ) + cy;
+    m_warpedY = (fy * (m_newX3D.row(1)).array() / (m_newX3D.row(2)).array() ) + cy; // y positon of the re-projected X3D on the reference frame.
     //m_warpedY.array() += cy;
 
     // (R.array() < s).select(P,Q );  // (R < s ? P : Q)
