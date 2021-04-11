@@ -214,7 +214,9 @@ void Frame::makePyramids()
     ///////////////////////////////////////////////
     // To Do list at 2021.04.11.
     // create pyramids of X3D and normals.
+    // Too expensive... Change point-to-plane error based on the depth loss of Kerl13Iros.
     ///////////////////////////////////////////////
+
 }
 
 void Frame::createPyramid(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSize, int interpolationFlag)

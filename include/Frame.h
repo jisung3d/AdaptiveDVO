@@ -83,8 +83,8 @@ class Frame{
         std::vector<cv::Mat> m_pyramidLaplacian;
         std::vector<cv::Mat> m_pyramidEdge;
         std::vector<cv::Mat> m_pyramidDepth;
-        std::vector<cv::Mat> m_pyramidX3D;
-        std::vector<cv::Mat> m_pyramidNormal;
+        // std::vector<cv::Mat3f> m_pyramidX3D;
+        // std::vector<cv::Mat3f> m_pyramidNormal;
         std::vector<cv::Mat> m_pyramidMask;
         std::string m_imageName;
         std::string m_depthName;

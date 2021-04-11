@@ -621,8 +621,10 @@ void EdgeDirectVO::make3DPoints(const cv::Mat& cameraMatrix, int lvl)
 // 0. Initialize Validity Maps based on RGB and Depth gradient values.
 // 1. Photoconsistency Maximization
 // 2. Gradient difference minimization
-// 3. Point-to-Plane distance minimization
-// TO DO LIST 2021.04.06.
+// 3. Point-to-Plane distance minimization 
+//  - Change point-to-plane error based on the depth loss of Kerl13Iros.
+//  - r_depth = D_2(tau(x,T)) - [(TK^(-1)(x,D_1(x)))]_Z
+// TO DO LIST 2021.04.11.
 /////////////////////////////////////////////////////////////////////////////////////
 float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int lvl, bool flagGradMax)
 {
