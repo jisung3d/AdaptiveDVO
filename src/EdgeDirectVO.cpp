@@ -18,8 +18,9 @@
 #include <iterator>
 #include <algorithm>
 
+#include <Settings.h>
+
 //#define DISPLAY_SEQUENCE
-//#define DISPLAY_LOGS
 
 namespace EdgeVO{
     using namespace cv;
@@ -32,33 +33,56 @@ EdgeDirectVO::EdgeDirectVO()
 #endif
     int length = m_sequence.getFrameHeight( getBottomPyramidLevel() ) * m_sequence.getFrameWidth( getBottomPyramidLevel() );
     m_X3DVector.resize(EdgeVO::Settings::PYRAMID_DEPTH); // Vector for each pyramid level
-    m_normalVector.resize(EdgeVO::Settings::PYRAMID_DEPTH); // Vector for each pyramid level
     for(size_t i = 0; i < m_X3DVector.size(); ++i){
         m_X3DVector[i].resize(length / std::pow(4, i) , Eigen::NoChange); //3 Vector for each pyramid for each image pixel
-        m_normalVector[i].resize(length / std::pow(4, i) , Eigen::NoChange); //3 Vector for each pyramid for each image pixel
     }
 
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before m_X3D" << std::endl;
+#endif
+
     m_X3D.resize(length, Eigen::NoChange);
-    m_normal.resize(length, Eigen::NoChange); // for ADVO
     m_warpedX.resize(length);
     m_warpedY.resize(length);
     m_warpedZ.resize(length);
+    m_gxD.resize(length);
+    m_gxDFinal.resize(length);
+    m_gyD.resize(length);
+    m_gyDFinal.resize(length);
     m_gx.resize(length);
     m_gxFinal.resize(length);
     m_gy.resize(length);
     m_gyFinal.resize(length);
     m_im1.resize(length);
+    m_im2.resize(length);
     m_im1Final.resize(length);
     m_im2Final.resize(length);
     m_ZFinal.resize(length);
-    m_Z.resize(length);
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before m_Z" << std::endl;
+#endif
+
+    m_Z.resize(length);    
+    m_D2.resize(length);    
+    m_D1Final.resize(length);
+    m_D2Final.resize(length);
+
     m_edgeMask.resize(length);
     
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before m_L" << std::endl;
+#endif
+
     m_L.resize(length);  // for ADVO
     m_Gx.resize(length);  // for ADVO
     m_Gy.resize(length);  // for ADVO
     m_GxFinal.resize(length);  // for ADVO
     m_GyFinal.resize(length); 
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before m_outputFile" << std::endl;
+#endif
 
     m_outputFile.open(EdgeVO::Settings::RESULTS_FILE);    
 #ifdef DISPLAY_LOGS
@@ -356,7 +380,7 @@ void EdgeDirectVO::runEdgeDirectVO()
 #endif
                 error_last = error;
 #ifdef ADAPTIVE_DVO_FULL                
-                error = warpAndProject(relative_pose.inversePoseEigen(), lvl, true);
+                error = warpAndProjectForAdaptiveDVO(relative_pose.inversePoseEigen(), lvl);
 #else
                 error = warpAndProject(relative_pose.inversePoseEigen(), lvl);
 #endif
@@ -369,7 +393,11 @@ void EdgeDirectVO::runEdgeDirectVO()
                 {
                     // Update relative pose
                     Eigen::Matrix<double, 6 , Eigen::RowMajor> del;
+                    #ifdef ADAPTIVE_DVO_FULL      
+                    solveSystemOfEquationsForADVO(lambda, lvl, del);
+                    #else
                     solveSystemOfEquations(lambda, lvl, del);
+                    #endif
                     //std::cout << del << std::endl;
                     
                     if( (del.segment<3>(0)).dot(del.segment<3>(0)) < EdgeVO::Settings::MIN_TRANSLATION_UPDATE & 
@@ -453,10 +481,13 @@ void EdgeDirectVO::prepareVectors(int lvl)
 
 #ifdef ADAPTIVE_DVO_FULL
     cv2eigen(m_sequence.getReferenceFrame()->getGradientMagVector(lvl), m_grad1);
-    cv2eigen(m_sequence.getCurrentFrame()->getGradientMagVector(lvl), m_grad2);
+    cv2eigen(m_sequence.getCurrentFrame()->getGradientMagVector(lvl), m_grad2);    
     cv2eigen(m_sequence.getCurrentFrame()->getGdx(lvl), m_Gx);
     cv2eigen(m_sequence.getCurrentFrame()->getGdy(lvl), m_Gy);
     cv2eigen(m_sequence.getCurrentFrame()->getLaplacian(lvl), m_L);
+    cv2eigen(m_sequence.getCurrentFrame()->getDepthMap(lvl), m_D2);
+    cv2eigen(m_sequence.getCurrentFrame()->getDepthGradientX(lvl), m_gxD);
+    cv2eigen(m_sequence.getCurrentFrame()->getDepthGradientY(lvl), m_gyD);
 #endif
     
     size_t numElements;
@@ -526,7 +557,7 @@ void EdgeDirectVO::prepareVectors(int lvl)
     numElements = (m_edgeMask.array() != 0).count();
 
 #ifdef DISPLAY_LOGS
-    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - numElements" << std::endl;
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - numElements : " << numElements << std::endl;
 #endif
     
     m_im1Final.resize(numElements);
@@ -534,11 +565,14 @@ void EdgeDirectVO::prepareVectors(int lvl)
     m_YFinal.resize(numElements);
     m_ZFinal.resize(numElements);
     m_X3D.resize(numElements ,Eigen::NoChange);
-    m_normal.resize(numElements ,Eigen::NoChange);
     m_finalMask.resize(numElements);
 
     m_grad1Final.resize(numElements);
     m_finalMaskGrad.resize(numElements);
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before masking" << std::endl;
+#endif
 
     size_t idx = 0;    
     for(int i = 0; i < m_edgeMask.rows(); ++i)
@@ -562,10 +596,10 @@ void EdgeDirectVO::prepareVectors(int lvl)
             }                
             ++idx;
 
-#ifdef DISPLAY_LOGS
-            std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - GLR_sq: " 
-                << GLR_sq << " (th: " << m_th_grad_2_sq[lvl] << ")" << std::endl;
-#endif     
+// #ifdef DISPLAY_LOGS
+//             std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - GLR_sq: " 
+//                 << GLR_sq << " (th: " << m_th_grad_2_sq[lvl] << ")" << std::endl;
+// #endif     
         }
     }
 #else //  REGULAR_DIRECT_VO true | REGULAR_DIRECT_VO_SUBSET true | EDGEVO_FULL true | ADAPTIVE_DVO_WITHOUT_GRAD true
@@ -648,11 +682,13 @@ float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int
 
     m_warpedX.resize(m_X3D.rows());
     m_warpedY.resize(m_X3D.rows());
+    m_warpedZ.resize(m_X3D.rows());
 
     m_warpedX = (fx * (m_newX3D.row(0)).array() / (m_newX3D.row(2)).array() ) + cx; // x positon of the re-projected X3D on the reference frame.
     //m_warpedX.array() += cx;
-    m_warpedY = (fy * (m_newX3D.row(1)).array() / (m_newX3D.row(2)).array() ) + cy; // y positon of the re-projected X3D on the reference frame.
+    m_warpedY = (fy * (m_newX3D.row(1)).array() / (m_newX3D.row(2)).array() ) + cy; // y positon of the re-projected X3D on the reference frame.    
     //m_warpedY.array() += cy;
+    m_warpedZ = m_newX3D.row(2).array(); // Z value of the transformed X3D on the reference frame.
 
     // (R.array() < s).select(P,Q );  // (R < s ? P : Q)
     //std::cout << newX3D.rows() << std::endl;
@@ -746,6 +782,8 @@ float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int
 #else //EDGEVO_SUBSET_POINTS_EXACT
     // For non random numbers EDGEVO_SUBSET_POINTS
     size_t numElements = (m_finalMask.array() != 0).count();
+    m_gxDFinal.resize(numElements);
+    m_gyDFinal.resize(numElements);
     m_gxFinal.resize(numElements);
     m_gyFinal.resize(numElements);
     m_im1.resize(numElements);
@@ -774,6 +812,10 @@ float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int
                 m_im2Final[idx] = interpolateVector(m_im2, m_warpedX[i], m_warpedY[i], w);
             }
             
+            m_D2Final[idx]  = interpolateVector( m_D2, m_warpedX[i], m_warpedY[i], w);
+            m_gxDFinal[idx]  = interpolateVector( m_gxD, m_warpedX[i], m_warpedY[i], w);
+            m_gyDFinal[idx]  = interpolateVector( m_gyD, m_warpedX[i], m_warpedY[i], w);
+
             m_XFinal[idx] = m_newX3D(0,i);
             m_YFinal[idx] = m_newX3D(1,i);
             m_ZFinal[idx] = m_newX3D(2,i);
@@ -789,19 +831,218 @@ float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int
     // calc residual
 
     //calc A and b matrices
-    //
+    // for Photometric Errors
     m_residual.resize(numElements);
     m_rsquared.resize(numElements);
     m_weights.resize(numElements);
-
+   
     m_residual = ( m_im1.array() - m_im2Final.array() );
     m_rsquared = m_residual.array() * m_residual.array();
 
     m_weights = Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor>::Ones(numElements);
     m_weights = ( ( (m_residual.array()).abs() ) > EdgeVO::Settings::HUBER_THRESH ).select( EdgeVO::Settings::HUBER_THRESH / (m_residual.array()).abs() , m_weights);
 
+    if(flagGradMax){
+        // for Geometric Errors
+        m_residual_D.resize(numElements);
+        m_rsquared_D.resize(numElements);    
+        m_weights_D.resize(numElements);
+
+        m_residual_D = (m_ZFinal.array() - m_D2Final.array());
+        m_rsquared_D = m_residual_D.array() * m_residual_D.array();
+
+        m_weights_D = Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor>::Ones(numElements);
+        m_weights_D = ( ( (m_residual_D.array()).abs() ) > EdgeVO::Settings::HUBER_THRESH ).select( EdgeVO::Settings::HUBER_THRESH / (m_residual_D.array()).abs() , m_weights);
+    }
+
     return ( (m_weights.array() * m_rsquared.array()).sum() / (float) numElements );
      
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+// TO DO LIST 2021.04.06.
+// Iterative Weighted Least Square (IWLS) Problem for joint optimization.
+// 0. Initialize Validity Maps based on RGB and Depth gradient values.
+// 1. Photoconsistency Maximization
+// 2. Gradient difference minimization
+// 3. Point-to-Plane distance minimization 
+//  - Change point-to-plane error based on the depth loss of Kerl13Iros.
+//  - r_depth = D_2(tau(x,T)) - [(TK^(-1)(x,D_1(x)))]_Z
+// TO DO LIST 2021.04.11.
+/////////////////////////////////////////////////////////////////////////////////////
+float EdgeDirectVO::warpAndProjectForAdaptiveDVO(const Eigen::Matrix<double,4,4>& invPose, int lvl)
+{
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#endif
+
+    Eigen::Matrix<float,3,3> R = (invPose.block<3,3>(0,0)).cast<float>() ;
+    Eigen::Matrix<float,3,1> t = (invPose.block<3,1>(0,3)).cast<float>() ;
+    //std::cout << R << std::endl << t << std::endl;
+    //std::cout << "Cols: " << m_X3D[lvl].cols() << "Rows: " << m_X3D[lvl].rows() << std::endl;
+    
+    m_newX3D.resize(Eigen::NoChange, m_X3D.rows());
+    m_newX3D = R * m_X3D.transpose() + t.replicate(1, m_X3D.rows() ); // transform X3D of current frame to the reference camera coordinates.
+
+    const Mat cameraMatrix(m_sequence.getCameraMatrix(lvl));
+    const float fx = cameraMatrix.at<float>(0, 0);
+    const float cx = cameraMatrix.at<float>(0, 2);
+    const float fy = cameraMatrix.at<float>(1, 1);
+    const float cy = cameraMatrix.at<float>(1, 2);
+    //std::cout << cy << std::endl;
+    //exit(1);
+    const int w = m_sequence.getFrameWidth(lvl);
+    const int h = m_sequence.getFrameHeight(lvl);
+
+    m_warpedX.resize(m_X3D.rows());
+    m_warpedY.resize(m_X3D.rows());
+    m_warpedZ.resize(m_X3D.rows());
+
+    m_warpedX = (fx * (m_newX3D.row(0)).array() / (m_newX3D.row(2)).array() ) + cx; // x positon of the re-projected X3D on the reference frame.
+    //m_warpedX.array() += cx;
+    m_warpedY = (fy * (m_newX3D.row(1)).array() / (m_newX3D.row(2)).array() ) + cy; // y positon of the re-projected X3D on the reference frame.    
+    //m_warpedY.array() += cy;
+    m_warpedZ = m_newX3D.row(2).array(); // Z value of the transformed X3D on the reference frame.
+
+    // (R.array() < s).select(P,Q );  // (R < s ? P : Q)
+    //std::cout << newX3D.rows() << std::endl;
+    //std::cout << m_finalMask.rows() << std::endl;
+
+    // Check both Z 3D points are >0
+    //m_finalMask = m_edgeMask;
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before Mask" << std::endl;
+#endif
+
+    // for Edge DVO
+    m_finalMask = m_edgeMask;
+
+    m_finalMask = (m_newX3D.row(2).transpose().array() <= 0.f).select(0, m_finalMask);
+    //m_finalMask = (m_newX3D.row(2).transpose().array() > EdgeVO::Settings::MAX_Z_DEPTH).select(0, m_finalMask);
+
+    //m_finalMask = (m_newX3D.row(2).transpose().array() > 10.f).select(0, m_finalMask);
+    m_finalMask = (m_X3D.col(2).array() <= 0.f).select(0, m_finalMask);
+    //m_finalMask = (m_X3D.col(2).array() > 10.f).select(0, m_finalMask);
+    m_finalMask = ( (m_X3D.col(2).array()).isFinite() ).select(m_finalMask, 0);
+    m_finalMask = ( (m_newX3D.row(2).transpose().array()).isFinite() ).select(m_finalMask, 0);
+    
+    // Check new projected x coordinates are: 0 <= x < w-1
+    m_finalMask = (m_warpedX.array() < 0.f).select(0, m_finalMask);
+    m_finalMask = (m_warpedX.array() >= w-2).select(0, m_finalMask);
+    m_finalMask = (m_warpedX.array().isFinite()).select(m_finalMask, 0);
+    // Check new projected x coordinates are: 0 <= y < h-1
+    m_finalMask = (m_warpedY.array() >= h-2).select(0, m_finalMask);
+    m_finalMask = (m_warpedY.array() < 0.f).select(0, m_finalMask);
+    m_finalMask = (m_warpedY.array().isFinite()).select(m_finalMask, 0);
+    
+    // for Adaptive DVO
+    m_finalMaskGrad = (m_newX3D.row(2).transpose().array() <= 0.f).select(0, m_finalMaskGrad);
+    //m_finalMask = (m_newX3D.row(2).transpose().array() > EdgeVO::Settings::MAX_Z_DEPTH).select(0, m_finalMask);
+
+    //m_finalMask = (m_newX3D.row(2).transpose().array() > 10.f).select(0, m_finalMask);
+    m_finalMaskGrad = (m_X3D.col(2).array() <= 0.f).select(0, m_finalMaskGrad);
+    //m_finalMask = (m_X3D.col(2).array() > 10.f).select(0, m_finalMask);
+    m_finalMaskGrad = ( (m_X3D.col(2).array()).isFinite() ).select(m_finalMaskGrad, 0);
+    m_finalMaskGrad = ( (m_newX3D.row(2).transpose().array()).isFinite() ).select(m_finalMaskGrad, 0);
+    
+    // Check new projected x coordinates are: 0 <= x < w-1
+    m_finalMaskGrad = (m_warpedX.array() < 0.f).select(0, m_finalMaskGrad);
+    m_finalMaskGrad = (m_warpedX.array() >= w-2).select(0, m_finalMaskGrad);
+    m_finalMaskGrad = (m_warpedX.array().isFinite()).select(m_finalMaskGrad, 0);
+    // Check new projected x coordinates are: 0 <= y < h-1
+    m_finalMaskGrad = (m_warpedY.array() >= h-2).select(0, m_finalMaskGrad);
+    m_finalMaskGrad = (m_warpedY.array() < 0.f).select(0, m_finalMaskGrad);
+    m_finalMaskGrad = (m_warpedY.array().isFinite()).select(m_finalMaskGrad, 0);
+    
+    // For non random numbers EDGEVO_SUBSET_POINTS
+    size_t numElements = (m_finalMask.array() != 0).count();
+    m_gxDFinal.resize(numElements);
+    m_gyDFinal.resize(numElements);
+    m_gxFinal.resize(numElements);
+    m_gyFinal.resize(numElements);
+    m_im1.resize(numElements);
+    m_im2Final.resize(numElements);
+    m_D2Final.resize(numElements);
+    m_XFinal.resize(numElements);
+    m_YFinal.resize(numElements);
+    m_ZFinal.resize(numElements);
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before pixel interpolation" << std::endl;
+#endif
+
+    size_t idx = 0;
+    for(int i = 0; i < m_finalMask.rows(); ++i)
+    {
+        if(m_finalMask[i] != 0)
+        {
+            // photometric loss
+            m_gxFinal[idx]  = interpolateVector( m_gx, m_warpedX[i], m_warpedY[i], w);
+            m_gyFinal[idx]  = interpolateVector( m_gy, m_warpedX[i], m_warpedY[i], w);
+            m_im1[idx] = m_im1Final[i];//interpolateVector(m_im1, m_warpedX[i], m_warpedY[i], w);
+            m_im2Final[idx] = interpolateVector(m_im2, m_warpedX[i], m_warpedY[i], w);
+            
+            // gradient loss            
+            // if(m_finalMaskGrad[i] != 0){
+            //     m_gxFinal[idx]  = interpolateVector( m_Gx, m_warpedX[i], m_warpedY[i], w);
+            //     m_gyFinal[idx]  = interpolateVector( m_Gy, m_warpedX[i], m_warpedY[i], w);
+            //     m_im1[idx] = m_grad1Final[i];//interpolateVector(m_im1, m_warpedX[i], m_warpedY[i], w);
+            //     m_im2Final[idx] = interpolateVector(m_grad2, m_warpedX[i], m_warpedY[i], w);
+            // }
+            
+            m_D2Final[idx]  = interpolateVector( m_D2, m_warpedX[i], m_warpedY[i], w);
+            m_gxDFinal[idx]  = interpolateVector( m_gxD, m_warpedX[i], m_warpedY[i], w);
+            m_gyDFinal[idx]  = interpolateVector( m_gyD, m_warpedX[i], m_warpedY[i], w);
+
+            m_XFinal[idx] = m_newX3D(0,i);
+            m_YFinal[idx] = m_newX3D(1,i);
+            m_ZFinal[idx] = m_newX3D(2,i);
+
+            ++idx;
+        }
+    }
+    
+    //apply mask to im1, im2, gx, and gy
+    //interp coordinates of im2, gx, and gy
+    // calc residual
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before Photometric Errors" << std::endl;
+#endif
+
+    //calc A and b matrices
+    // for Photometric Errors
+    m_residual.resize(numElements);
+    m_rsquared.resize(numElements);
+    m_weights.resize(numElements);
+   
+    m_residual = ( m_im1.array() - m_im2Final.array() );
+    m_rsquared = m_residual.array() * m_residual.array();
+
+    m_weights = Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor>::Ones(numElements);
+    m_weights = ( ( (m_residual.array()).abs() ) > EdgeVO::Settings::HUBER_THRESH ).select( EdgeVO::Settings::HUBER_THRESH / (m_residual.array()).abs() , m_weights);
+    
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before Geometric Errors" << std::endl;
+#endif
+
+    // for Geometric Errors
+    m_residual_D.resize(numElements);
+    m_rsquared_D.resize(numElements);    
+    m_weights_D.resize(numElements);
+
+    m_residual_D = (m_ZFinal.array() - m_D2Final.array());
+    m_rsquared_D = m_residual_D.array() * m_residual_D.array();
+
+    m_weights_D = Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor>::Ones(numElements);
+    m_weights_D = ( ( (m_residual_D.array()).abs() ) > EdgeVO::Settings::HUBER_THRESH ).select( EdgeVO::Settings::HUBER_THRESH / (m_residual_D.array()).abs() , m_weights_D);
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#endif
+
+    return ( (m_weights.array() * m_rsquared.array() + 0.1 /*Tuning*/ * m_weights_D.array() * m_rsquared_D.array()).sum()/ (float) numElements );     
 }
 
 void EdgeDirectVO::solveSystemOfEquations(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate)
@@ -839,6 +1080,11 @@ void EdgeDirectVO::solveSystemOfEquations(const float lambda, const int lvl, Eig
     
 }
 
+/////////////////////////////////////////////////////////////////
+// computeJacobianOfProjectionAndTransformation(e_it->getPointVec4f(), Jw);
+// compute3rdRowOfJacobianOfTransformation(e_it->getPointVec4f(), Jz);
+// J.row(0) = e_it->getIntensityDerivativeVec2f().transpose() * Jw;
+// J.row(1) = e_it->getDepthDerivativeVec2f().transpose() * Jw - Jz.transpose();
 void EdgeDirectVO::solveSystemOfEquationsForADVO(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate)
 {
     const Mat cameraMatrix(m_sequence.getCameraMatrix(lvl));
@@ -850,6 +1096,7 @@ void EdgeDirectVO::solveSystemOfEquationsForADVO(const float lambda, const int l
     size_t numElements = m_im2Final.rows();
     Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> Z2 = m_ZFinal.array() * m_ZFinal.array();
 
+    // for Photometric Errors
     m_Jacobian.resize(numElements, Eigen::NoChange);
     m_Jacobian.col(0) =  m_weights.array() * fx * ( m_gxFinal.array() / m_ZFinal.array() );
 
@@ -868,9 +1115,38 @@ void EdgeDirectVO::solveSystemOfEquationsForADVO(const float lambda, const int l
                         / m_ZFinal.array();
     
     m_residual.array() *= m_weights.array();
-    
-    poseupdate = -( (m_Jacobian.transpose() * m_Jacobian).cast<double>() ).ldlt().solve( (m_Jacobian.transpose() * m_residual).cast<double>() );
 
+    // for Geometric Errors
+    m_Jacobian_D.resize(numElements, Eigen::NoChange);
+    // for Z_2(tau(x,T))) - [Tpi^-1(x,Z_1(x))]_Z
+    m_Jacobian_D.col(0) =  m_weights_D.array() * fx * ( m_gxDFinal.array() / m_ZFinal.array() );
+
+    m_Jacobian_D.col(1) =  m_weights_D.array() * fy * ( m_gyDFinal.array() / m_ZFinal.array() );
+
+    m_Jacobian_D.col(2) = - m_weights_D.array()* ( fx * ( m_XFinal.array() * m_gxDFinal.array() ) + fy * ( m_YFinal.array() * m_gyDFinal.array() ) )
+                        / ( Z2.array() );
+
+    m_Jacobian_D.col(3) = - m_weights_D.array() * ( fx * m_XFinal.array() * m_YFinal.array() * m_gxDFinal.array() / Z2.array()
+                         + fy *( 1.f + ( m_YFinal.array() * m_YFinal.array() / Z2.array() ) ) * m_gyDFinal.array() )
+                         + 1.0;
+
+    m_Jacobian_D.col(4) = m_weights_D.array() * ( fx * (1.f + ( m_XFinal.array() * m_XFinal.array() / Z2.array() ) ) * m_gxDFinal.array() 
+                        + fy * ( m_XFinal.array() * m_YFinal.array() * m_gyDFinal.array() ) / Z2.array() )
+                        + m_YFinal.array()
+                        - m_XFinal.array();
+
+    m_Jacobian_D.col(5) = m_weights_D.array() * ( -fx * ( m_YFinal.array() * m_gxDFinal.array() ) + fy * ( m_XFinal.array() * m_gyDFinal.array() ) )
+                        / m_ZFinal.array();
+    
+    m_residual_D.array() *= m_weights_D.array();
+
+    ///////////////////////////////////////////////////////
+    // Tested empirically
+    float ratio = 0.1, ratio_sq = sqrt(ratio);
+    ///////////////////////////////////////////////////////
+
+    poseupdate = -( (m_Jacobian.transpose() * m_Jacobian).cast<double>() + ratio * (m_Jacobian_D.transpose() * m_Jacobian).cast<double>()).ldlt().solve( 
+        (m_Jacobian.transpose() * m_residual + ratio_sq * m_Jacobian_D.transpose() * m_residual_D).cast<double>() );
     
 }
 

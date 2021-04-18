@@ -34,6 +34,7 @@ class EdgeDirectVO{
         void prepare3DPoints( );
         void make3DPoints(const cv::Mat& cameraMatrix, int lvl);
         float warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int lvl, bool flagGradMax = false);
+        float warpAndProjectForAdaptiveDVO(const Eigen::Matrix<double,4,4>& invPose, int lvl);
         float interpolateVector(const Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor>& toInterp, float x, float y, int w) const;
         bool checkBounds(float x, float xlim, float y, float ylim, float oldZ, float newZ, bool edgePixel);
 
@@ -54,7 +55,9 @@ class EdgeDirectVO{
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_im1Final;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_im2Final;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_residual;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_residual_D;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_rsquared;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_rsquared_D;
 
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_grad1;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_grad2;
@@ -65,7 +68,9 @@ class EdgeDirectVO{
         // Matrices and vectors for solving Least Squares problem
         // poseupdate = -((1+lambda).*(w.*J))\(w.*r);
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_weights;
-        Eigen::Matrix<float, Eigen::Dynamic, 6, Eigen::RowMajor> m_Jacobian;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_weights_D;
+        Eigen::Matrix<float, Eigen::Dynamic, 6, Eigen::RowMajor> m_Jacobian;        
+        Eigen::Matrix<float, Eigen::Dynamic, 6, Eigen::RowMajor> m_Jacobian_D;  // for ADVO
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_weights_grad;   // for ADVO
         Eigen::Matrix<float, Eigen::Dynamic, 6, Eigen::RowMajor> m_Jacobian_grad;   // for ADVO
         
@@ -73,19 +78,27 @@ class EdgeDirectVO{
 
         // Depth of Image 1
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_Z;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_D2;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_D1Final;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_D2Final;
         // Warped x,y image coordinates
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_warpedX;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_warpedY;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_warpedZ;
 
         // Vector of 3D points and Transformed 3D points
         std::vector<Eigen::Matrix<float, Eigen::Dynamic, 3, Eigen::RowMajor>> m_X3DVector;
         Eigen::Matrix<float, Eigen::Dynamic, 3, Eigen::RowMajor> m_X3D;
-        Eigen::Matrix<float, 3, Eigen::Dynamic, Eigen::RowMajor> m_newX3D;
-        std::vector<Eigen::Matrix<float, Eigen::Dynamic, 3, Eigen::RowMajor>> m_normalVector; // for ADVO
-        Eigen::Matrix<float, 3, Eigen::Dynamic, Eigen::RowMajor> m_normal;  // for ADVO
+        Eigen::Matrix<float, 3, Eigen::Dynamic, Eigen::RowMajor> m_newX3D;        
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_XFinal;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_YFinal;
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_ZFinal;
+
+        // Vectors of Depth Gradients
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_gxD;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_gyD;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_gxDFinal;
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_gyDFinal;
 
         // Vectors of Image Gradients
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_gx;
@@ -107,7 +120,6 @@ class EdgeDirectVO{
         float m_lambda;
 
         //Currently unused
-        Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_warpedZ;
         Eigen::Matrix<float, 6 , 6, Eigen::RowMajor> m_JTJ;
         Eigen::Matrix<float, 6 , Eigen::RowMajor> m_JTr;
         Eigen::Matrix<double, 6 , Eigen::RowMajor> m_poseupdate;

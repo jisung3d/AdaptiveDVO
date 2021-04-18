@@ -1,6 +1,8 @@
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
+//#define DISPLAY_LOGS
+
 #include <iostream>
 #include <math.h>
 #include <string>

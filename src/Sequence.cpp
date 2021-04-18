@@ -50,14 +50,16 @@ void readAssocTextfile(std::string filename,
       }
       if (count == 2) {
         inputRGBPaths.push_back(EdgeVO::Settings::DATASET_DIRECTORY + buf);
-        std::cout << buf << std::endl;
+        //std::cout << buf << std::endl;
       } else if (count == 4) {
         inputDepthPaths.push_back(EdgeVO::Settings::DATASET_DIRECTORY + buf);
-        std::cout << buf << std::endl;
+        //std::cout << buf << std::endl;
       }
     }
   }
   in_stream.close();
+
+  std::cout << filename << " - Association complete." << std::endl;
 }
 
 
@@ -78,10 +80,15 @@ void readAssocTextfile(std::string filename,
 Sequence::Sequence(std::string filename)
     : m_referenceIndex(0) , m_currentIndex(1)
 {
-    //std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#endif
+
     readAssocTextfile(filename, m_imagePaths, m_depthPaths, m_timestamps);
 
-    //std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - readAssocTextfile complete." << std::endl;
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - readAssocTextfile complete." << std::endl;
+#endif   
     
     m_numDepthFiles = m_depthPaths.size();
     m_numImageFiles = m_imagePaths.size();
@@ -125,6 +132,9 @@ Sequence::Sequence(std::string filename)
     cv::namedWindow( EdgeVO::Settings::DISPLAY_DEPTH_WINDOW , cv::WINDOW_AUTOSIZE );
 #endif //DISPLAY_SEQUENCE
 
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#endif
 }
 
 /*

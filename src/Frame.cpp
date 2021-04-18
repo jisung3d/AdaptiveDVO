@@ -42,13 +42,13 @@ Frame::Frame(std::string imagePath, std::string depthPath, Sequence* seq)
     m_pyramidDepth.resize(EdgeVO::Settings::PYRAMID_DEPTH);
     m_pyramidEdge.resize(EdgeVO::Settings::PYRAMID_DEPTH);
     m_pyramidLaplacian.resize(EdgeVO::Settings::PYRAMID_DEPTH);
+    m_pyramid_Ddx.resize(EdgeVO::Settings::PYRAMID_DEPTH);
+    m_pyramid_Ddy.resize(EdgeVO::Settings::PYRAMID_DEPTH);
     m_pyramid_Idx.resize(EdgeVO::Settings::PYRAMID_DEPTH);
     m_pyramid_Idy.resize(EdgeVO::Settings::PYRAMID_DEPTH);
     m_pyramid_gradMag.resize(EdgeVO::Settings::PYRAMID_DEPTH); // for ADVO
     m_pyramid_Gdx.resize(EdgeVO::Settings::PYRAMID_DEPTH); // for ADVO
-    m_pyramid_Gdy.resize(EdgeVO::Settings::PYRAMID_DEPTH); // for ADVO    
-    m_pyramidX3D.resize(EdgeVO::Settings::PYRAMID_DEPTH);  // for ADVO
-    m_pyramidNormal.resize(EdgeVO::Settings::PYRAMID_DEPTH); // for ADVO
+    m_pyramid_Gdy.resize(EdgeVO::Settings::PYRAMID_DEPTH); // for ADVO
 
     m_pyramidImageUINT[0] = m_image.clone(); 
     m_pyramidImage[0] = m_image;
@@ -173,6 +173,14 @@ cv::Mat Frame::getLaplacian(int lvl) const
 {
     return (m_pyramidLaplacian[lvl].clone()).reshape(1, m_pyramidLaplacian[lvl].rows * m_pyramidLaplacian[lvl].cols);
 }
+cv::Mat Frame::getDepthGradientX(int lvl) const
+{
+    return (m_pyramid_Ddx[lvl].clone()).reshape(1, m_pyramid_Ddx[lvl].rows * m_pyramid_Ddx[lvl].cols);
+}
+cv::Mat Frame::getDepthGradientY(int lvl) const
+{
+    return (m_pyramid_Ddy[lvl].clone()).reshape(1, m_pyramid_Ddy[lvl].rows * m_pyramid_Ddy[lvl].cols);
+}
 cv::Mat Frame::getGradientX(int lvl) const
 {
     return (m_pyramid_Idx[lvl].clone()).reshape(1, m_pyramid_Idx[lvl].rows * m_pyramid_Idx[lvl].cols);
@@ -185,9 +193,18 @@ cv::Mat Frame::getGradientY(int lvl) const
 
 void Frame::makePyramids()
 {
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#endif
+
     createPyramid(m_pyramidImage[0], m_pyramidImage, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_LINEAR);
     cv::buildPyramid(m_pyramidImageUINT[0], m_pyramidImageUINT, EdgeVO::Settings::PYRAMID_BUILD);
-    
+
+    createPyramid(m_pyramidDepth[0], m_pyramidDepth, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before CANNY" << std::endl;
+#endif
 
 #ifdef CANNY_EDGES
     // Canny
@@ -204,12 +221,16 @@ void Frame::makePyramids()
     createSobelEdgePyramids();
 #endif
 
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before ADVO" << std::endl;
+#endif
+
 #ifdef ADAPTIVE_DVO_FULL
     createImageGradientPyramids(true);
+    createDepthGradientPyramids();
 #else
     createImageGradientPyramids();
-#endif
-    createPyramid(m_pyramidDepth[0], m_pyramidDepth, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
+#endif    
 
     ///////////////////////////////////////////////
     // To Do list at 2021.04.11.
@@ -217,6 +238,9 @@ void Frame::makePyramids()
     // Too expensive... Change point-to-plane error based on the depth loss of Kerl13Iros.
     ///////////////////////////////////////////////
 
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#endif
 }
 
 void Frame::createPyramid(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSize, int interpolationFlag)
@@ -224,9 +248,38 @@ void Frame::createPyramid(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSi
     dst.resize(pyramidSize);
     dst[0] = src;
     for(size_t i = 1; i < pyramidSize; ++i)
-        cv::resize(dst[i-1], dst[i],cv::Size(0, 0), 0.5, 0.5, interpolationFlag);
- 
-    
+        cv::resize(dst[i-1], dst[i],cv::Size(0, 0), 0.5, 0.5, interpolationFlag);    
+}
+
+void Frame::createDepthGradientPyramids()
+{
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#endif
+
+    int one(1);
+    int zero(0);
+    double scale = 0.5;
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before calcGradientX" << std::endl;
+#endif
+
+    // Dx
+    calcGradientX(m_pyramidDepth[0], m_pyramid_Ddx[0]);
+    // Dy
+    calcGradientY(m_pyramidDepth[0], m_pyramid_Ddy[0]);
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before createPyramid" << std::endl;
+#endif
+
+    createPyramid(m_pyramid_Ddx[0], m_pyramid_Ddx, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_NEAREST);
+    createPyramid(m_pyramid_Ddy[0], m_pyramid_Ddy, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_NEAREST); 
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#endif   
 }
 
 void Frame::createImageGradientPyramids(bool flagLaplacian)
