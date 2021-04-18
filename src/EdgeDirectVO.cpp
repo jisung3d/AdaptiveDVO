@@ -1081,10 +1081,6 @@ void EdgeDirectVO::solveSystemOfEquations(const float lambda, const int lvl, Eig
 }
 
 /////////////////////////////////////////////////////////////////
-// computeJacobianOfProjectionAndTransformation(e_it->getPointVec4f(), Jw);
-// compute3rdRowOfJacobianOfTransformation(e_it->getPointVec4f(), Jz);
-// J.row(0) = e_it->getIntensityDerivativeVec2f().transpose() * Jw;
-// J.row(1) = e_it->getDepthDerivativeVec2f().transpose() * Jw - Jz.transpose();
 void EdgeDirectVO::solveSystemOfEquationsForADVO(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate)
 {
     const Mat cameraMatrix(m_sequence.getCameraMatrix(lvl));
