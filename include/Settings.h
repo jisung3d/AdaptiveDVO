@@ -26,11 +26,17 @@ namespace EdgeVO{
         //#define EDGEVO_FULL true
         //#define EDGEVO_SUBSET_POINTS true        
         #define ADAPTIVE_DVO_FULL true
+        //#define ADAPTIVE_DVO_EDGE true        
         //#define ADAPTIVE_DVO_WITHOUT_GRAD true
+        //#define ADAPTIVE_DVO_WITHOUT_GLR true
+        //#define ADAPTIVE_DVO_WITHOUT_MASP true
 
         const double PERCENT_EDGES = 0.85;
 
-        const int NUMBER_POINTS = 50;
+        //const int NUMBER_POINTS = 50;
+
+        const double COST_RATIO = .1;
+        const double TH_GLR = 1.0;
         
         //#define EDGEVO_SUBSET_POINTS_EXACT true     //For only using a subset of points, uncomment this
 
@@ -38,6 +44,7 @@ namespace EdgeVO{
         // Specify datasets
         enum SELECT_DATASET
         {
+            // w/ groundtruth
             rgbd_dataset_freiburg1_xyz =    0,
             rgbd_dataset_freiburg2_xyz =    1,
             rgbd_dataset_freiburg1_desk =   2,
@@ -49,26 +56,50 @@ namespace EdgeVO{
             rgbd_dataset_freiburg3_structure_notexture_near = 8,
             rgbd_dataset_freiburg1_rpy = 9,
             rgbd_dataset_freiburg1_room = 10,
-            rgbd_dataset_freiburg1_plant = 11
+            rgbd_dataset_freiburg1_plant = 11,
+            rgbd_dataset_freiburg1_teddy = 12,
+            rgbd_dataset_freiburg1_floor = 13,
+
+            // w/o groundtruth
+            rgbd_dataset_freiburg1_xyz_secret = 14,
+            rgbd_dataset_freiburg1_rpy_secret = 15,            
+            rgbd_dataset_freiburg1_desk_secret = 16,                    
+            rgbd_dataset_freiburg1_desk2_secret = 17,
+            rgbd_dataset_freiburg1_room_secret = 18,
+            rgbd_dataset_freiburg1_plant_secret = 19,
+            rgbd_dataset_freiburg2_desk_secret = 20
         };
-        const std::string DATASET_OPTIONS[] = 
-        {   std::string("rgbd_dataset_freiburg1_xyz"), 
-            std::string("rgbd_dataset_freiburg2_xyz"),
-            std::string("rgbd_dataset_freiburg1_desk"), 
-            std::string("rgbd_dataset_freiburg2_desk"),
-            std::string("rgbd_dataset_freiburg3_long_office_household"),
-            std::string("rgbd_dataset_freiburg1_desk2"),
-            std::string("rgbd_dataset_freiburg2_large_no_loop"),
-            std::string("rgbd_dataset_freiburg3_structure_notexture_far"),
-            std::string("rgbd_dataset_freiburg3_structure_notexture_near"), 
-            std::string("rgbd_dataset_freiburg1_rpy"),
-            std::string("rgbd_dataset_freiburg1_room"),
-            std::string("rgbd_dataset_freiburg1_plant")
+        const std::string DATASET_OPTIONS[] =         
+        {   
+            // w/ groundtruth
+            std::string("rgbd_dataset_freiburg1_xyz"),                      // 0
+            std::string("rgbd_dataset_freiburg2_xyz"),                      // 1
+            std::string("rgbd_dataset_freiburg1_desk"),                     // 2
+            std::string("rgbd_dataset_freiburg2_desk"),                     // 3
+            std::string("rgbd_dataset_freiburg3_long_office_household"),    // 4
+            std::string("rgbd_dataset_freiburg1_desk2"),                    // 5
+            std::string("rgbd_dataset_freiburg2_large_no_loop"),            // 6
+            std::string("rgbd_dataset_freiburg3_structure_notexture_far"),  // 7
+            std::string("rgbd_dataset_freiburg3_structure_notexture_near"), // 8
+            std::string("rgbd_dataset_freiburg1_rpy"),                      // 9
+            std::string("rgbd_dataset_freiburg1_room"),                     // 10
+            std::string("rgbd_dataset_freiburg1_plant"),                    // 11
+            std::string("rgbd_dataset_freiburg1_teddy"),                    // 12
+            std::string("rgbd_dataset_freiburg1_floor"),                     // 13
+
+            // w/o groundtruth
+            std::string("rgbd_dataset_freiburg1_xyz_secret"),                      // 14
+            std::string("rgbd_dataset_freiburg1_rpy_secret"),                      // 15            
+            std::string("rgbd_dataset_freiburg1_desk_secret"),                     // 16                    
+            std::string("rgbd_dataset_freiburg1_desk2_secret"),                    // 17            
+            std::string("rgbd_dataset_freiburg1_room_secret"),                     // 18
+            std::string("rgbd_dataset_freiburg1_plant_secret"),                    // 19
+            std::string("rgbd_dataset_freiburg2_desk_secret")                     // 20
         };
 
-        const int DATASET_NUMBER = 0;
+        const int DATASET_NUMBER = 14;
 
-        const int KEYFRAME_INTERVAL(3);
+        const int KEYFRAME_INTERVAL(1);
 
         const int PYRAMID_DEPTH(3);
 

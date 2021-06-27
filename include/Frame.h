@@ -42,7 +42,8 @@ class Frame{
         cv::Mat getGdx(int lvl) const;
         cv::Mat getGdy(int lvl) const;
 
-        void createPyramid(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSize, int interpolationFlag);
+        void createPyramid(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSize, int interpolationFlag, bool flagMASP=false);
+        void createPyramidWithBilateralFiltering(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSize, int interpolationFlag);
         void calcGradientX(cv::Mat& src, cv::Mat& dst);
         void calcGradientY(cv::Mat& src, cv::Mat& dst);
         void calcLaplacian(cv::Mat& src, cv::Mat& dst);
@@ -58,6 +59,9 @@ class Frame{
         void makePyramids();
         void createDepthGradientPyramids();
         void createImageGradientPyramids(bool flagLaplacian = false);
+        
+        // Edge Smoothing Fiter for extending valid gradient ranges.
+        void edgeSmoothingFilter(cv::Mat &in_img);
 
         // Canny Edges
         void createCannyEdgePyramids();

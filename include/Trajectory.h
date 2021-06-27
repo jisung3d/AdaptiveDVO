@@ -1,6 +1,8 @@
 #ifndef TRAJECTORY_H
 #define TRAJECTORY_H
 
+#define READ_GROUNDTRUTH_TRAJECTORY
+
 #include <opencv2/core/core.hpp>
 #include "Pose.h"
 #include "Settings.h"

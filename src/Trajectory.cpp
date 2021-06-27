@@ -43,10 +43,21 @@ void readGroundTruthFile(const std::string filename, std::vector<Pose*>& traject
 Trajectory::Trajectory(const std::string filename)
     :m_currentIndex(-1)
 {
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+    std::cout << filename << std::endl;
+#endif
+
+#ifdef READ_GROUNDTRUTH_TRAJECTORY
     readGroundTruthFile(filename, m_groundtruthTrajectory, m_timestamps);
     addPose(*m_groundtruthTrajectory[0]);
     //std::cout << getCurrentPose() << std::endl;
-    printf("%.15f" , getCurrentTimestamp() );
+    //printf("%.15f" , getCurrentTimestamp() );
+#endif
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#endif
 }
 
 Trajectory::~Trajectory()

@@ -150,7 +150,7 @@ if __name__=="__main__":
     second_xyz_full_aligned = rot * second_xyz_full + trans
     
     if args.verbose:
-        ("compared_pose_pairs %d pairs"%(len(trans_error)))
+        print("compared_pose_pairs %d pairs"%(len(trans_error)))
 
         print("absolute_translational_error.rmse %f m"%numpy.sqrt(numpy.dot(trans_error,trans_error) / len(trans_error)))
         print("absolute_translational_error.mean %f m"%numpy.mean(trans_error))

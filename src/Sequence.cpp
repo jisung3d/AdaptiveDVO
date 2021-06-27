@@ -88,6 +88,9 @@ Sequence::Sequence(std::string filename)
 
 #ifdef DISPLAY_LOGS
     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - readAssocTextfile complete." << std::endl;
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - readAssocTextfile complete." << std::endl;
+    std::cout << "m_referenceIndex " << m_referenceIndex << std::endl;
+    std::cout << "m_currentIndex " << m_currentIndex << std::endl;
 #endif   
     
     m_numDepthFiles = m_depthPaths.size();
@@ -221,19 +224,47 @@ bool Sequence::advanceSequence()
 
 void Sequence::makeCurrentFramePyramids()
 {
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#endif
+
     m_current->makePyramids();
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#endif
+
     return;
 }
 
 void Sequence::makeReferenceFramePyramids()
 {
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;    
+#endif
+
     m_reference->makePyramids();
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#endif
+
     return;
 }
 void Sequence::makeFramePyramids()
 {
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#endif
+
     makeCurrentFramePyramids();
     makeReferenceFramePyramids();
+
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#endif
+
     return;
 }
 

@@ -28,12 +28,14 @@ Frame::Frame(std::string imagePath, std::string depthPath, Sequence* seq)
     :m_image(cv::imread(imagePath, cv::ImreadModes::IMREAD_GRAYSCALE)) , m_depthMap(cv::imread(depthPath, cv::ImreadModes::IMREAD_UNCHANGED)) , 
     m_imageName(imagePath), m_depthName(depthPath), m_seq(seq)
 {
-    // std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
+#ifdef DISPLAY_LOGS 
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
 
-    // std::cout << "imagePath: " << imagePath << std::endl;
-    // std::cout << "depthPath: " << depthPath << std::endl;
-    // std::cout << "m_image: " << m_image.cols << " x " << m_image.rows << "(ch: " << m_image.channels() << ")" << std::endl;    
-    // std::cout << "m_depthMap: " << m_depthMap.cols << " x " << m_depthMap.rows << "(ch: " << m_depthMap.channels() << ")" << std::endl;
+    std::cout << "imagePath: " << imagePath << std::endl;
+    std::cout << "depthPath: " << depthPath << std::endl;
+    std::cout << "m_image: " << m_image.cols << " x " << m_image.rows << "(ch: " << m_image.channels() << ")" << std::endl;    
+    std::cout << "m_depthMap: " << m_depthMap.cols << " x " << m_depthMap.rows << "(ch: " << m_depthMap.channels() << ")" << std::endl;
+#endif
 
     //m_image.convertTo(m_image, CV_32FC1);
     //m_depthMap.convertTo(m_depthMap, CV_32FC1, EdgeVO::Settings::PIXEL_TO_METER_SCALE_FACTOR);
@@ -64,7 +66,9 @@ Frame::Frame(std::string imagePath, std::string depthPath, Sequence* seq)
     m_sforestDetector = nullptr;
 #endif
     
-    // std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#endif
 }
 
 Frame::Frame(Mat& image, Mat& depthMap)
@@ -197,10 +201,19 @@ void Frame::makePyramids()
     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
 #endif
 
+    #if ADAPTIVE_DVO_FULL
     createPyramid(m_pyramidImage[0], m_pyramidImage, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_LINEAR);
+    #else
+    createPyramid(m_pyramidImage[0], m_pyramidImage, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_LINEAR);
+    #endif
     cv::buildPyramid(m_pyramidImageUINT[0], m_pyramidImageUINT, EdgeVO::Settings::PYRAMID_BUILD);
 
+    #if EDGEVO_FULL
     createPyramid(m_pyramidDepth[0], m_pyramidDepth, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
+    #else
+    createPyramid(m_pyramidDepth[0], m_pyramidDepth, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
+    //createPyramidWithBilateralFiltering(m_pyramidDepth[0], m_pyramidDepth, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_NEAREST);    
+    #endif
 
 #ifdef DISPLAY_LOGS
     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before CANNY" << std::endl;
@@ -225,7 +238,7 @@ void Frame::makePyramids()
     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - before ADVO" << std::endl;
 #endif
 
-#ifdef ADAPTIVE_DVO_FULL
+#if ADAPTIVE_DVO_FULL | ADAPTIVE_DVO_EDGE | ADAPTIVE_DVO_WITHOUT_GRAD
     createImageGradientPyramids(true);
     createDepthGradientPyramids();
 #else
@@ -243,12 +256,35 @@ void Frame::makePyramids()
 #endif
 }
 
-void Frame::createPyramid(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSize, int interpolationFlag)
-{
-    dst.resize(pyramidSize);
+void Frame::createPyramid(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSize, int interpolationFlag, bool flagMASP)
+{    
+    dst.resize(pyramidSize);        
     dst[0] = src;
-    for(size_t i = 1; i < pyramidSize; ++i)
-        cv::resize(dst[i-1], dst[i],cv::Size(0, 0), 0.5, 0.5, interpolationFlag);    
+
+    for(size_t i = 1; i < pyramidSize; ++i){
+        if(flagMASP){
+            cv::Mat img_tmp = dst[i-1].clone();
+            //cv::Size ksize(2*(i-1)+1, 2*(i-1)+1);
+            //cv::GaussianBlur(img_tmp, dst[i-1], ksize, 0);
+            //cv::bilateralFilter(img_tmp, dst[i-1], 2*i+1, 75, 75);
+        }        
+        cv::resize(dst[i-1], dst[i],cv::Size(0, 0), 0.5, 0.5, interpolationFlag);        
+    }
+}
+
+void Frame::createPyramidWithBilateralFiltering(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSize, int interpolationFlag)
+{
+    cv::Mat img_tmp;
+    float sigma_s = 8.0;
+    float sigma_d = 0.2;
+
+    dst.resize(pyramidSize);
+    img_tmp = src.clone(); cv::bilateralFilter(img_tmp, dst[0], 5, sigma_d, sigma_s);
+    dst[0] = src;
+    for(size_t i = 1; i < pyramidSize; ++i){        
+        cv::resize(dst[i-1], dst[i],cv::Size(0, 0), 0.5, 0.5, interpolationFlag);        
+        img_tmp = dst[i].clone(); cv::bilateralFilter(img_tmp, dst[i], 5, sigma_d, sigma_s);
+    }
 }
 
 void Frame::createDepthGradientPyramids()
@@ -299,7 +335,11 @@ void Frame::createImageGradientPyramids(bool flagLaplacian)
     if(flagLaplacian){
         // gradient magnitude pyramid.
         //m_pyramid_gradMag[0] = cv::Mat::zeros(m_pyramid_Idx[0].size(), CV_32FC1);
-        m_pyramid_gradMag[0] = m_pyramid_Idx[0].mul(m_pyramid_Idx[0]) + m_pyramid_Idy[0].mul(m_pyramid_Idy[0]);
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // Is it correct?
+        // m_pyramid_gradMag[0] = m_pyramid_Idx[0].mul(m_pyramid_Idx[0]) + m_pyramid_Idy[0].mul(m_pyramid_Idy[0]);
+        cv::sqrt(m_pyramid_Idx[0].mul(m_pyramid_Idx[0]) + m_pyramid_Idy[0].mul(m_pyramid_Idy[0]), m_pyramid_gradMag[0]);
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////
         createPyramid(m_pyramid_gradMag[0], m_pyramid_gradMag, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_CUBIC);
         // Ixx, Iyy
         calcGradientX(m_pyramid_gradMag[0], m_pyramid_Gdx[0]);
@@ -364,6 +404,14 @@ void Frame::calcLaplacian(cv::Mat& src, cv::Mat& dst)
             dst.at<float>(j,i) = tLap/8.0f;
 		}
 	}
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Smooth intensity pixels where the gradient magnitude is large only.
+void Frame::edgeSmoothingFilter(cv::Mat &in_img)
+/////////////////////////////////////////////////////////////////////////////
+{
+
 }
 
 void Frame::createCannyEdgePyramids()

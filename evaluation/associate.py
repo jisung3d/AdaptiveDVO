@@ -110,7 +110,7 @@ if __name__ == '__main__':
     parser.add_argument('second_file', help='second text file (format: timestamp data)')
     parser.add_argument('--first_only', help='only output associated lines from first file', action='store_true')
     parser.add_argument('--offset', help='time offset added to the timestamps of the second file (default: 0.0)',default=0.0)
-    parser.add_argument('--max_difference', help='maximally allowed time difference for matching entries (default: 0.02)',default=0.035)#0.02
+    parser.add_argument('--max_difference', help='maximally allowed time difference for matching entries (default: 0.02)',default=0.02)#0.02
     args = parser.parse_args()
 
     first_list = read_file_list(args.first_file)
