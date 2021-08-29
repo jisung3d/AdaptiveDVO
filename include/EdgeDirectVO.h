@@ -35,6 +35,8 @@ class EdgeDirectVO{
         void make3DPoints(const cv::Mat& cameraMatrix, int lvl);
         float warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int lvl, bool flagGradMax = false);
         float warpAndProjectForAdaptiveDVO(const Eigen::Matrix<double,4,4>& invPose, int lvl);
+        float computeAverageDisparity(const Eigen::Matrix<double,4,4>& invPose, int lvl);
+
         float interpolateVector(const Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor>& toInterp, float x, float y, int w) const;
         bool checkBounds(float x, float xlim, float y, float ylim, float oldZ, float newZ, bool edgePixel);
 
@@ -48,6 +50,8 @@ class EdgeDirectVO{
         Statistics m_statistics;
 
         std::ofstream m_outputFile;
+
+        float m_avg_disp_prev;
 
         // Image Vectors and residual vectors
         Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> m_im1;

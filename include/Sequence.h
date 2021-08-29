@@ -37,8 +37,8 @@ class Sequence{
         cv::Mat getCameraMatrix(int level);
 
         bool advanceSequence();
-        void makeReferenceFramePyramids();
-        void makeCurrentFramePyramids();
+        void makeReferenceFramePyramids(bool flagMasf = false);
+        void makeCurrentFramePyramids(bool flagMasf = false);
         void makeFramePyramids();
 
         bool sequenceNotFinished();

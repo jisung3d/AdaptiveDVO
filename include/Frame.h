@@ -56,7 +56,7 @@ class Frame{
         cv::Mat& getEdgeForDisplayOnly();
         cv::Mat& getDepthForDisplayOnly();
 
-        void makePyramids();
+        void makePyramids(bool flagMasf = false);
         void createDepthGradientPyramids();
         void createImageGradientPyramids(bool flagLaplacian = false);
         

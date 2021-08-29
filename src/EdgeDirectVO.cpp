@@ -26,7 +26,7 @@ namespace EdgeVO{
     using namespace cv;
 EdgeDirectVO::EdgeDirectVO()
     :m_sequence(EdgeVO::Settings::ASSOC_FILE) , m_trajectory() , 
-     m_lambda(0.)
+     m_lambda(0.), m_avg_disp_prev(0.0f)
 {
 #ifdef DISPLAY_LOGS
     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
@@ -340,7 +340,13 @@ void EdgeDirectVO::runEdgeDirectVO()
 #else
         //Start algorithm timer for each iteration
         float startTime = (float) EdgeVO::CycleTimer::currentSeconds();
-        m_sequence.makeCurrentFramePyramids();
+        // check MASF
+        bool flagMasf = false;
+#if MASF_FOR_LARGE_MOTION_HANDLING
+        if(m_avg_disp_prev > 5.0f) flagMasf = true;
+#endif
+        m_sequence.makeCurrentFramePyramids(flagMasf);
+    
 #endif //DISPLAY_SEQUENCE
 
         if( n % EdgeVO::Settings::KEYFRAME_INTERVAL == 0 )
@@ -440,6 +446,15 @@ void EdgeDirectVO::runEdgeDirectVO()
         float endTime = (float) EdgeVO::CycleTimer::currentSeconds();
         m_trajectory.addPose(camera_pose);
 
+#if MASF_FOR_LARGE_MOTION_HANDLING
+        //////////////////////////////////////////////////////////////////////////////
+        // MASF //////////////////////////////////////////////////////////////////////
+        // If the relative motion makes the average flow larger than threshold,
+        // Smooth the highest layer of the next input image.
+        m_avg_disp_prev = computeAverageDisparity(relative_pose.inversePoseEigen(), getTopPyramidLevel());
+        std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - average flow magnitude : " << m_avg_disp_prev << std::endl;
+        //////////////////////////////////////////////////////////////////////////////
+#endif
         // Don't time past this part (reading from disk)
 #ifdef DISPLAY_LOGS                
         std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - addDurationForFrame" << std::endl;
@@ -1087,6 +1102,77 @@ float EdgeDirectVO::warpAndProjectForAdaptiveDVO(const Eigen::Matrix<double,4,4>
 #endif
 
     return ( (m_weights.array() * m_rsquared.array() + EdgeVO::Settings::COST_RATIO /*Tuning*/ * m_weights_D.array() * m_rsquared_D.array()).sum()/ (float) numElements );     
+}
+
+float EdgeDirectVO::computeAverageDisparity(const Eigen::Matrix<double,4,4>& invPose, int lvl)
+{
+#ifdef DISPLAY_LOGS
+    std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
+#endif
+
+    float avg_disp = 0.0f;
+
+    Eigen::Matrix<float,3,3> R = (invPose.block<3,3>(0,0)).cast<float>() ;
+    Eigen::Matrix<float,3,1> t = (invPose.block<3,1>(0,3)).cast<float>() ;
+
+    Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> originX, originY;
+    Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> deltaX, deltaY, flowMag;
+
+    //std::cout << R << std::endl << t << std::endl;
+    //std::cout << "Cols: " << m_X3D[lvl].cols() << "Rows: " << m_X3D[lvl].rows() << std::endl;
+    
+    Eigen::Matrix<float, 3, Eigen::Dynamic, Eigen::RowMajor> m_X3Dt;
+
+    m_X3Dt = m_X3D.transpose();
+
+    m_newX3D.resize(Eigen::NoChange, m_X3D.rows());
+    m_newX3D = R * m_X3D.transpose() + t.replicate(1, m_X3D.rows() ); // transform X3D of current frame to the reference camera coordinates.
+
+    const Mat cameraMatrix(m_sequence.getCameraMatrix(lvl));
+    const float fx = cameraMatrix.at<float>(0, 0);
+    const float cx = cameraMatrix.at<float>(0, 2);
+    const float fy = cameraMatrix.at<float>(1, 1);
+    const float cy = cameraMatrix.at<float>(1, 2);
+    //std::cout << cy << std::endl;
+    //exit(1);
+    const int w = m_sequence.getFrameWidth(lvl);
+    const int h = m_sequence.getFrameHeight(lvl);
+
+    // compute origin pixels.
+    originX.resize(m_X3D.rows());
+    originY.resize(m_X3D.rows());
+    //m_originZ.resize(m_X3D.rows());
+
+    originX = (fx * (m_X3Dt.row(0)).array() / (m_X3Dt.row(2)).array() ) + cx; // x positon of the re-projected X3D on the target frame.
+    originY = (fy * (m_X3Dt.row(1)).array() / (m_X3Dt.row(2)).array() ) + cy; // y positon of the re-projected X3D on the target frame.    
+    //m_originZ = m_X3D.row(2).array(); // Z value of the transformed X3D on the reference frame.
+
+    // compute warped pixels.
+    m_warpedX.resize(m_X3D.rows());
+    m_warpedY.resize(m_X3D.rows());
+    //m_warpedZ.resize(m_X3D.rows());
+
+    m_warpedX = (fx * (m_newX3D.row(0)).array() / (m_newX3D.row(2)).array() ) + cx; // x positon of the re-projected X3D on the reference frame.
+    m_warpedY = (fy * (m_newX3D.row(1)).array() / (m_newX3D.row(2)).array() ) + cy; // y positon of the re-projected X3D on the reference frame.    
+    //m_warpedZ = m_newX3D.row(2).array(); // Z value of the transformed X3D on the reference frame.
+
+    // compute flows.
+    deltaX.resize(m_X3D.rows());
+    deltaY.resize(m_X3D.rows());
+    flowMag.resize(m_X3D.rows());
+
+    // std::cout << "m_X3D : " << m_X3D.rows() << "x" << m_X3D.cols() << std::endl;
+    // std::cout << "m_newX3D : " << m_newX3D.rows() << "x" << m_newX3D.cols() << std::endl;
+    // std::cout << "m_warpedX : " << m_warpedX.rows() << " x " << m_warpedX.cols() << std::endl;
+    // std::cout << "originX : " << originX.rows() << " x " << originX.cols() << std::endl;
+
+    deltaX = m_warpedX - originX;
+    deltaY = m_warpedY - originY;
+    flowMag = deltaX.array()*deltaX.array() + deltaY.array()*deltaY.array();
+
+    avg_disp = cv::sqrt(flowMag.mean());
+    
+    return avg_disp;
 }
 
 void EdgeDirectVO::solveSystemOfEquations(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate)

@@ -222,14 +222,13 @@ bool Sequence::advanceSequence()
     return true;
 }
 
-void Sequence::makeCurrentFramePyramids()
+void Sequence::makeCurrentFramePyramids(bool flagMasf)
 {
 
 #ifdef DISPLAY_LOGS
     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
-#endif
-
-    m_current->makePyramids();
+#endif        
+    m_current->makePyramids(flagMasf);
 
 #ifdef DISPLAY_LOGS
     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
@@ -238,13 +237,13 @@ void Sequence::makeCurrentFramePyramids()
     return;
 }
 
-void Sequence::makeReferenceFramePyramids()
+void Sequence::makeReferenceFramePyramids(bool flagMasf)
 {
 #ifdef DISPLAY_LOGS
     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;    
 #endif
 
-    m_reference->makePyramids();
+    m_reference->makePyramids(flagMasf);
 
 #ifdef DISPLAY_LOGS
     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;

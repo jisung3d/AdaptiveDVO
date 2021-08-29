@@ -195,14 +195,14 @@ cv::Mat Frame::getGradientY(int lvl) const
 }
 
 
-void Frame::makePyramids()
+void Frame::makePyramids(bool flagMasf)
 {
 #ifdef DISPLAY_LOGS
     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
 #endif
 
     #if ADAPTIVE_DVO_FULL
-    createPyramid(m_pyramidImage[0], m_pyramidImage, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_LINEAR);
+    createPyramid(m_pyramidImage[0], m_pyramidImage, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_LINEAR, flagMasf);
     #else
     createPyramid(m_pyramidImage[0], m_pyramidImage, EdgeVO::Settings::PYRAMID_DEPTH, cv::INTER_LINEAR);
     #endif
@@ -261,14 +261,12 @@ void Frame::createPyramid(cv::Mat& src, std::vector<cv::Mat>& dst, int pyramidSi
     dst.resize(pyramidSize);        
     dst[0] = src;
 
-    for(size_t i = 1; i < pyramidSize; ++i){
-        if(flagMASP){
-            cv::Mat img_tmp = dst[i-1].clone();
-            //cv::Size ksize(2*(i-1)+1, 2*(i-1)+1);
-            //cv::GaussianBlur(img_tmp, dst[i-1], ksize, 0);
-            //cv::bilateralFilter(img_tmp, dst[i-1], 2*i+1, 75, 75);
-        }        
-        cv::resize(dst[i-1], dst[i],cv::Size(0, 0), 0.5, 0.5, interpolationFlag);        
+    for(size_t i = 1; i < pyramidSize; ++i){            
+        cv::resize(dst[i-1], dst[i],cv::Size(0, 0), 0.5, 0.5, interpolationFlag);
+
+        if(flagMASP && i == pyramidSize - 1){
+            edgeSmoothingFilter(dst[i]);
+        }         
     }
 }
 
@@ -411,6 +409,45 @@ void Frame::calcLaplacian(cv::Mat& src, cv::Mat& dst)
 void Frame::edgeSmoothingFilter(cv::Mat &in_img)
 /////////////////////////////////////////////////////////////////////////////
 {
+    cv::Mat img_grad_x, img_grad_y, img_grad_mag;
+    cv::Mat tmp_img = in_img.clone();
+
+    // Ix
+    calcGradientX(in_img, img_grad_x);
+    // Iy
+    calcGradientY(in_img, img_grad_y);
+   
+    cv::sqrt(img_grad_x.mul(img_grad_x) + img_grad_y.mul(img_grad_y), img_grad_mag);
+
+    float *p_img_grad_mag = img_grad_mag.ptr<float>();
+    unsigned char *p_in_img = in_img.ptr<unsigned char>();
+    unsigned char *p_tmp_img = tmp_img.ptr<unsigned char>();
+
+    int ww = in_img.cols, hh = in_img.rows;
+    
+    // Smooth pixel intensity where gradient magnitude is higher than threshold.
+    for(int j=1; j<hh-1; ++j){
+        for(int i=1; i<ww-1; ++i){
+            
+            float avg = 0.0f;
+            int idx = j*ww + i;
+
+            ////////////////////////////////////////////////
+            if(p_img_grad_mag[idx] >= EdgeVO::Settings::EDGE_SMOOTH_GRADIENT_THRESH){
+            ////////////////////////////////////////////////
+                for(int n=-1; n<=1; ++n){
+                    for(int k=-1; k<=1; ++k){
+                        int idx_win = idx + n*ww + k;
+                        avg += (float)p_in_img[idx_win];
+                    }
+                }
+                avg /= 9.0f;
+                p_tmp_img[idx] = (unsigned char)avg;
+            }
+        }
+    }
+
+    in_img = tmp_img.clone();
 
 }
 
