@@ -24,7 +24,7 @@ class EdgeDirectVO{
         void runEdgeDirectVO();
         void solveSystemOfEquations(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate);
         //void runAdaptiveDirectVO();
-        void solveSystemOfEquationsForADVO(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate);
+        void solveSystemOfEquationsForADVO(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate, float& reweightDepthCost);
         // Helper Algorithms //
         void prepareVectors(int lvl);
         void warpAndCalculateResiduals(const Pose& pose, const std::vector<float>& Z, const std::vector<bool>& E, const int h, const int w, const cv::Mat& cameraMatrix, const int lvl);
@@ -34,7 +34,7 @@ class EdgeDirectVO{
         void prepare3DPoints( );
         void make3DPoints(const cv::Mat& cameraMatrix, int lvl);
         float warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int lvl, bool flagGradMax = false);
-        float warpAndProjectForAdaptiveDVO(const Eigen::Matrix<double,4,4>& invPose, int lvl);
+        float warpAndProjectForAdaptiveDVO(const Eigen::Matrix<double,4,4>& invPose, int lvl, float& lambda);
         float computeAverageDisparity(const Eigen::Matrix<double,4,4>& invPose, int lvl);
 
         float interpolateVector(const Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor>& toInterp, float x, float y, int w) const;

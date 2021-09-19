@@ -381,6 +381,7 @@ void EdgeDirectVO::runEdgeDirectVO()
             //make3DPoints(cameraMatrix, lvl);            
 
             float lambda = 0.f;
+            float reweightDepthCost = EdgeVO::Settings::COST_RATIO;
             float error_last = EdgeVO::Settings::INF_F;
             float error = error_last;
             for(int i = 0; i < EdgeVO::Settings::MAX_ITERATIONS_PER_PYRAMID[ lvl ]; ++i)
@@ -390,7 +391,7 @@ void EdgeDirectVO::runEdgeDirectVO()
 #endif
                 error_last = error;
 #if ADAPTIVE_DVO_FULL | ADAPTIVE_DVO_EDGE | ADAPTIVE_DVO_WITHOUT_GRAD
-                error = warpAndProjectForAdaptiveDVO(relative_pose.inversePoseEigen(), lvl);
+                error = warpAndProjectForAdaptiveDVO(relative_pose.inversePoseEigen(), lvl, reweightDepthCost);
 #else
                 error = warpAndProject(relative_pose.inversePoseEigen(), lvl);
 #endif
@@ -404,7 +405,7 @@ void EdgeDirectVO::runEdgeDirectVO()
                     // Update relative pose
                     Eigen::Matrix<double, 6 , Eigen::RowMajor> del;
                     #if ADAPTIVE_DVO_FULL | ADAPTIVE_DVO_EDGE | ADAPTIVE_DVO_WITHOUT_GRAD
-                    solveSystemOfEquationsForADVO(lambda, lvl, del);                    
+                    solveSystemOfEquationsForADVO(lambda, lvl, del, reweightDepthCost);                    
                     #else
                     solveSystemOfEquations(lambda, lvl, del);
                     #endif
@@ -920,7 +921,7 @@ float EdgeDirectVO::warpAndProject(const Eigen::Matrix<double,4,4>& invPose, int
 //  - r_depth = D_2(tau(x,T)) - [(TK^(-1)(x,D_1(x)))]_Z
 // TO DO LIST 2021.04.11.
 /////////////////////////////////////////////////////////////////////////////////////
-float EdgeDirectVO::warpAndProjectForAdaptiveDVO(const Eigen::Matrix<double,4,4>& invPose, int lvl)
+float EdgeDirectVO::warpAndProjectForAdaptiveDVO(const Eigen::Matrix<double,4,4>& invPose, int lvl, float& reweightDepthCost)
 {
 #ifdef DISPLAY_LOGS
     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - X" << std::endl;
@@ -1094,14 +1095,42 @@ float EdgeDirectVO::warpAndProjectForAdaptiveDVO(const Eigen::Matrix<double,4,4>
     m_residual_D = (m_ZFinal.array() - m_D2Final.array());
     m_rsquared_D = m_residual_D.array() * m_residual_D.array();
 
+    // std::cout << "Average residual Photo: " << m_residual.mean() << std::endl;
+    // std::cout << "Average residual Geo: " << m_residual_D.mean() << std::endl;
+
     m_weights_D = Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor>::Ones(numElements);
-    m_weights_D = ( ( (m_residual_D.array()).abs() ) > EdgeVO::Settings::HUBER_THRESH ).select( EdgeVO::Settings::HUBER_THRESH / (m_residual_D.array()).abs() , m_weights_D);
+    m_weights_D = ( ( (m_residual_D.array()).abs() ) > EdgeVO::Settings::HUBER_THRESH_DEPTH ).select( EdgeVO::Settings::HUBER_THRESH_DEPTH / (m_residual_D.array()).abs() , m_weights_D);
 
 #ifdef DISPLAY_LOGS
     std::cout << typeid(*this).name() << "::" << __FUNCTION__ << " - E" << std::endl;
 #endif
 
-    return ( (m_weights.array() * m_rsquared.array() + EdgeVO::Settings::COST_RATIO /*Tuning*/ * m_weights_D.array() * m_rsquared_D.array()).sum()/ (float) numElements );     
+    // Compute weighted residuals.
+    Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> rsquared_W, rsqauredD_W;
+    rsquared_W = m_weights.array() * m_rsquared.array();
+    rsqauredD_W = m_weights_D.array() * m_rsquared_D.array();
+
+#if ADAPTIVE_DVO_WITH_REWEIGHT_COST
+    // Iteratively update lambda.
+    // compute variance of each squared residual matrix.
+    Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> centered;
+    float scale_p, scale_d;
+
+    centered = rsquared_W.array() - rsquared_W.mean();    scale_p = sqrt((centered.array() * centered.array()).sum() / float(numElements - 1));
+    centered = rsqauredD_W.array() - rsqauredD_W.mean();  scale_d = sqrt((centered.array() * centered.array()).sum() / float(numElements - 1));
+
+    std::cout << "Variance of squared residual photometric: " << scale_p << std::endl;
+    std::cout << "Variance of squared residual geometric: " << scale_d << std::endl;
+    
+    reweightDepthCost = scale_p/scale_d;
+
+    std::cout << "Lambda: " << reweightDepthCost << std::endl;
+#else
+    // Fixed linear aggregation.
+    reweightDepthCost = EdgeVO::Settings::COST_RATIO;
+#endif
+
+    return ( (rsquared_W + reweightDepthCost * rsqauredD_W).sum()/ (float) numElements );     
 }
 
 float EdgeDirectVO::computeAverageDisparity(const Eigen::Matrix<double,4,4>& invPose, int lvl)
@@ -1211,7 +1240,7 @@ void EdgeDirectVO::solveSystemOfEquations(const float lambda, const int lvl, Eig
 }
 
 /////////////////////////////////////////////////////////////////
-void EdgeDirectVO::solveSystemOfEquationsForADVO(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate)
+void EdgeDirectVO::solveSystemOfEquationsForADVO(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate, float& reweightDepthCost)
 {
     const Mat cameraMatrix(m_sequence.getCameraMatrix(lvl));
     const float fx = cameraMatrix.at<float>(0, 0);
@@ -1224,12 +1253,17 @@ void EdgeDirectVO::solveSystemOfEquationsForADVO(const float lambda, const int l
 
     // for Photometric Errors
     m_Jacobian.resize(numElements, Eigen::NoChange);
-    m_Jacobian.col(0) =  m_weights.array() * fx * ( m_gxFinal.array() / m_ZFinal.array() );
+    m_Jacobian.col(0) =  m_weights.array() * ( fx * m_gxFinal.array() / m_ZFinal.array() );
 
-    m_Jacobian.col(1) =  m_weights.array() * fy * ( m_gyFinal.array() / m_ZFinal.array() );
+    m_Jacobian.col(1) =  m_weights.array() * ( fy * m_gyFinal.array() / m_ZFinal.array() );
 
-    m_Jacobian.col(2) = - m_weights.array()* ( fx * ( m_XFinal.array() * m_gxFinal.array() ) + fy * ( m_YFinal.array() * m_gyFinal.array() ) )
-                        / ( Z2.array() );
+    m_Jacobian.col(2) = m_weights.array() * ( - ( fx * m_gxFinal.array() * m_XFinal.array() + fy * m_gyFinal.array() * m_YFinal.array() ) / Z2.array() );
+
+    // m_Jacobian.col(3) = - m_ZFinal.array() * m_Jacobian.col(1).array() + m_YFinal.array() * m_Jacobian.col(2).array();
+
+    // m_Jacobian.col(4) = m_ZFinal.array() * m_Jacobian.col(0).array() - m_XFinal.array() * m_Jacobian.col(2).array();
+
+    // m_Jacobian.col(5) = -m_YFinal.array() * m_Jacobian.col(0).array() + m_YFinal.array() * m_Jacobian.col(1).array();
 
     m_Jacobian.col(3) = - m_weights.array() * ( fx * m_XFinal.array() * m_YFinal.array() * m_gxFinal.array() / Z2.array()
                          + fy *( 1.f + ( m_YFinal.array() * m_YFinal.array() / Z2.array() ) ) * m_gyFinal.array() );
@@ -1239,42 +1273,128 @@ void EdgeDirectVO::solveSystemOfEquationsForADVO(const float lambda, const int l
 
     m_Jacobian.col(5) = m_weights.array() * ( -fx * ( m_YFinal.array() * m_gxFinal.array() ) + fy * ( m_XFinal.array() * m_gyFinal.array() ) )
                         / m_ZFinal.array();
-    
+   
     m_residual.array() *= m_weights.array();
 
+    ////////////////////////////////////////////////
     // for Geometric Errors
-    m_Jacobian_D.resize(numElements, Eigen::NoChange);
     // for Z_2(tau(x,T))) - [Tpi^-1(x,Z_1(x))]_Z
-    m_Jacobian_D.col(0) =  m_weights_D.array() * fx * ( m_gxDFinal.array() / m_ZFinal.array() );
+    ////////////////////////////////////////////////
+    m_Jacobian_D.resize(numElements, Eigen::NoChange);
+    
+    m_Jacobian_D.col(0) =  m_weights_D.array() * ( fx * m_gxDFinal.array() / m_ZFinal.array() );
 
-    m_Jacobian_D.col(1) =  m_weights_D.array() * fy * ( m_gyDFinal.array() / m_ZFinal.array() );
+    m_Jacobian_D.col(1) =  m_weights_D.array() * ( fy * m_gyDFinal.array() / m_ZFinal.array() );
 
-    m_Jacobian_D.col(2) = - m_weights_D.array()* ( fx * ( m_XFinal.array() * m_gxDFinal.array() ) + fy * ( m_YFinal.array() * m_gyDFinal.array() ) )
-                        / ( Z2.array() );
+    m_Jacobian_D.col(2) = m_weights_D.array() * ( - ( fx * m_gxDFinal.array() * m_XFinal.array() + fy * m_gyDFinal.array() * m_YFinal.array() ) / Z2.array() );
+    
+    m_Jacobian_D.col(3) = - m_ZFinal.array() * m_Jacobian_D.col(1).array() + m_YFinal.array() * m_Jacobian_D.col(2).array()
+                            - m_weights_D.array();
 
-    m_Jacobian_D.col(3) = - m_weights_D.array() * ( fx * m_XFinal.array() * m_YFinal.array() * m_gxDFinal.array() / Z2.array()
-                         + fy *( 1.f + ( m_YFinal.array() * m_YFinal.array() / Z2.array() ) ) * m_gyDFinal.array() )
-                         + 1.0;
+    m_Jacobian_D.col(4) = m_ZFinal.array() * m_Jacobian_D.col(0).array() - m_XFinal.array() * m_Jacobian_D.col(2).array()
+                            - m_weights_D.array() * m_YFinal.array();
 
-    m_Jacobian_D.col(4) = m_weights_D.array() * ( fx * (1.f + ( m_XFinal.array() * m_XFinal.array() / Z2.array() ) ) * m_gxDFinal.array() 
-                        + fy * ( m_XFinal.array() * m_YFinal.array() * m_gyDFinal.array() ) / Z2.array() )
-                        + m_YFinal.array()
-                        - m_XFinal.array();
-
-    m_Jacobian_D.col(5) = m_weights_D.array() * ( -fx * ( m_YFinal.array() * m_gxDFinal.array() ) + fy * ( m_XFinal.array() * m_gyDFinal.array() ) )
-                        / m_ZFinal.array();
+    m_Jacobian_D.col(5) = -m_YFinal.array() * m_Jacobian_D.col(0).array() + m_YFinal.array() * m_Jacobian_D.col(1).array()
+                            + m_weights_D.array() * m_XFinal.array();
     
     m_residual_D.array() *= m_weights_D.array();
 
     ///////////////////////////////////////////////////////
     // Tested empirically
-    double ratio = EdgeVO::Settings::COST_RATIO, ratio_sq = sqrt(ratio);
+    double ratio = reweightDepthCost, ratio_sq = sqrt(ratio);
     ///////////////////////////////////////////////////////
 
-     poseupdate = -( (m_Jacobian.transpose() * m_Jacobian).cast<double>() + ratio * (m_Jacobian_D.transpose() * m_Jacobian).cast<double>()).ldlt().solve( 
+    poseupdate = -( (m_Jacobian.transpose() * m_Jacobian).cast<double>() + ratio * (m_Jacobian_D.transpose() * m_Jacobian).cast<double>()).ldlt().solve( 
         (m_Jacobian.transpose() * m_residual + ratio_sq * m_Jacobian_D.transpose() * m_residual_D).cast<double>() );
-    
+    // poseupdate = -( (m_Jacobian.transpose() * m_Jacobian).cast<double>() + reweightDepthCost * (m_Jacobian_D.transpose() * m_Jacobian).cast<double>()).ldlt().solve( 
+    //     (m_Jacobian.transpose() * m_residual + reweightDepthCost * m_Jacobian_D.transpose() * m_residual_D).cast<double>() );    
 }
+
+// /////////////////////////////////////////////////////////////
+// Under Construction 2021.09.19.
+////////////////////////////////////////////////////////////////
+// void EdgeDirectVO::solveSystemOfEquationsForADVO(const float lambda, const int lvl, Eigen::Matrix<double, 6 , Eigen::RowMajor>& poseupdate, float& reweightDepthCost)
+// {
+//     const Mat cameraMatrix(m_sequence.getCameraMatrix(lvl));
+//     const float fx = cameraMatrix.at<float>(0, 0);
+//     const float cx = cameraMatrix.at<float>(0, 2);
+//     const float fy = cameraMatrix.at<float>(1, 1);
+//     const float cy = cameraMatrix.at<float>(1, 2);
+
+//     size_t numElements = m_im2Final.rows();
+//     Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor> Z2 = m_ZFinal.array() * m_ZFinal.array();
+
+//     Eigen::Matrix<float, Eigen::Dynamic, 6, Eigen::RowMajor> m_Jacobian_W;
+//     Eigen::Matrix<float, Eigen::Dynamic, 6, Eigen::RowMajor> m_JacobianD_W;
+
+//     // for Photometric Errors
+//     m_Jacobian.resize(numElements, Eigen::NoChange);
+//     m_Jacobian.col(0) =  fx * m_gxFinal.array() / m_ZFinal.array();
+
+//     m_Jacobian.col(1) =  fy * m_gyFinal.array() / m_ZFinal.array();
+
+//     m_Jacobian.col(2) = - ( fx * m_gxFinal.array() * m_XFinal.array() + fy * m_gyFinal.array() * m_YFinal.array() ) / ( Z2.array() );
+
+//     m_Jacobian.col(3) = - ( fx * m_gxFinal.array() * m_XFinal.array() * m_YFinal.array() / Z2.array() 
+//                                 + fy * m_gyFinal.array() * ( 1.f + SQUARE(m_YFinal.array()) ) / Z2.array() );
+
+//     m_Jacobian.col(4) = fx * m_gxFinal.array() * (1.f + SQUARE(m_XFinal.array()) / Z2.array() ) 
+//                             + fy * m_gyFinal.array() * m_XFinal.array() * m_YFinal.array() / Z2.array();
+
+//     m_Jacobian.col(5) = ( - fx * m_gxFinal.array() * m_YFinal.array() + fy * m_gyFinal.array() * m_XFinal.array() ) / m_ZFinal.array();
+
+//     // multiply weights
+//     m_Jacobian_W.resize(numElements, Eigen::NoChange);
+//     for(int i=0; i<6; ++i) m_Jacobian_W.col(i) = m_weights.array() * m_Jacobian.col(i).array();    
+//     //m_residual.array() *= m_weights.array();
+
+//     ////////////////////////////////////////////////////////////
+//     // for Geometric Errors
+//     // for Z_2(tau(x,T))) - [Tpi^-1(x,Z_1(x))]_Z
+//     ////////////////////////////////////////////////////////////
+//     m_Jacobian_D.resize(numElements, Eigen::NoChange);    
+    
+//     m_Jacobian_D.col(0) =  fx * m_gxDFinal.array() / m_ZFinal.array();
+
+//     m_Jacobian_D.col(1) =  fy * m_gyDFinal.array() / m_ZFinal.array();
+
+//     m_Jacobian_D.col(2) = - ( fx * m_gxDFinal.array() * m_XFinal.array() + fy * m_gyDFinal.array() * m_YFinal.array() ) / ( Z2.array() );
+
+//     m_Jacobian_D.col(3) = - ( fx * m_gxDFinal.array() * m_XFinal.array() * m_YFinal.array() / Z2.array() 
+//                                 + fy * m_gyDFinal.array() * ( 1.f + SQUARE(m_YFinal.array()) ) / Z2.array() )
+//                                 - 1.f;
+//     // m_Jacobian_D.col(3) = - ( ( fx * m_XFinal.array() * m_YFinal.array() * m_gxDFinal.array() / Z2.array()
+//     //                      + fy *( 1.f + ( m_YFinal.array() * m_YFinal.array() / Z2.array() ) ) * m_gyDFinal.array() )
+//     //                      + 1.0);
+    
+//     m_Jacobian_D.col(4) =  fx * m_gxDFinal.array() * (1.f + SQUARE(m_XFinal.array()) / Z2.array() ) 
+//                             + fy * m_gyDFinal.array() * m_XFinal.array() * m_YFinal.array() / Z2.array()
+//                             - m_YFinal.array()
+//                             + m_XFinal.array();
+                        
+//     // m_Jacobian_D.col(4) = ( ( fx * (1.f + ( m_XFinal.array() * m_XFinal.array() / Z2.array() ) ) * m_gxDFinal.array() 
+//     //                     + fy * ( m_XFinal.array() * m_YFinal.array() * m_gyDFinal.array() ) / Z2.array() )
+//     //                     + m_YFinal.array()
+//     //                     - m_XFinal.array());
+
+//     m_Jacobian_D.col(5) = ( - fx * m_gxDFinal.array() * m_YFinal.array() + fy * m_gyDFinal.array() * m_XFinal.array() ) / m_ZFinal.array();
+
+//     // multiply weights
+//     m_JacobianD_W.resize(numElements, Eigen::NoChange);
+//     for(int i=0; i<6; ++i) m_JacobianD_W.col(i) = m_weights_D.array() * m_Jacobian_D.col(i).array();
+//     //m_residual_D.array() *= m_weights_D.array();
+
+//     ///////////////////////////////////////////////////////
+//     // Tested empirically
+//     double ratio = reweightDepthCost, ratio_sq = sqrt(ratio);
+//     ///////////////////////////////////////////////////////
+
+//     poseupdate = -( (m_Jacobian_W.transpose() * m_Jacobian).cast<double>() + ratio * (m_JacobianD_W.transpose() * m_Jacobian_D).cast<double>()).ldlt().solve( 
+//         (m_Jacobian_W.transpose() * m_residual + ratio_sq * m_JacobianD_W.transpose() * m_residual_D).cast<double>() );
+
+//     // poseupdate = -( (m_Jacobian_W.transpose() * m_Jacobian).cast<double>() + reweightDepthCost * (m_JacobianD_W.transpose() * m_Jacobian_D).cast<double>()).ldlt().solve( 
+//     //       (m_Jacobian_W.transpose() * m_residual + reweightDepthCost * m_JacobianD_W.transpose() * m_residual_D).cast<double>() );
+// }
 
 float EdgeDirectVO::interpolateVector(const Eigen::Matrix<float, Eigen::Dynamic, Eigen::RowMajor>& toInterp, float x, float y, int w) const
 {

@@ -30,13 +30,23 @@ namespace EdgeVO{
         //#define ADAPTIVE_DVO_WITHOUT_GRAD true
         //#define ADAPTIVE_DVO_WITHOUT_GLR true
         //#define ADAPTIVE_DVO_WITHOUT_MASP true
+        #define MASF_FOR_LARGE_MOTION_HANDLING false
 
+        #define ADAPTIVE_DVO_WITH_REWEIGHT_COST false
+        
         const double PERCENT_EDGES = 0.85;
 
         //const int NUMBER_POINTS = 50;
 
-        const double COST_RATIO = .1;
+        const double COST_RATIO = 0.1; // E = E_photo[0,255] + COST_RATIO*E_depth[0,5]
         const double TH_GLR = 1.0;
+
+        //const double COST_RATIO = 0.1;
+        //const double TH_GLR = 1.0;
+
+        //EdgeVO.h Huber Weights
+        const float HUBER_THRESH = 5.f; // intensity dynamic range [0,255]
+        const float HUBER_THRESH_DEPTH = 5.f;//.03f; // depth dynamic range [0m, 5.0m]
         
         //#define EDGEVO_SUBSET_POINTS_EXACT true     //For only using a subset of points, uncomment this
 
@@ -164,23 +174,21 @@ namespace EdgeVO{
 
         //General
         const float INF_F(std::numeric_limits<float>::infinity());
-
-        //EdgeVO.h Huber Weights
-        const float HUBER_THRESH = 5.f;
+        
         // EdgeVO.h Lambda
         const float LAMBDA_MIN = 0.f;
         const float LAMBDA_MAX = 0.2f;
         const float LAMBDA_UPDATE_FACTOR = 0.5f;
 
         const float MIN_GRADIENT_THRESH = 50.f;
+        ///////////////////////////////////////////////////////////////////////
+        const float EDGE_SMOOTH_GRADIENT_THRESH = 50.0f;
+        ///////////////////////////////////////////////////////////////////////
         //EdgeVO.h output file
         const std::string RESULTS_FILE(std::string("../") + DATASET + std::string("_results.txt") );
         const int RESULTS_FILE_PRECISION(7);
 
         //Number of points to use in EdgeVO.cpp
-        
-
-
 
         const std::string DATASET_EVAL_RPE_OPTIONS[] = 
         {   std::string("python evaluate_rpe.py groundtruth_fr1xyz.txt rgbd_dataset_freiburg1_xyz_results.txt --fixed_delta --delta 1 --verbose") , 
