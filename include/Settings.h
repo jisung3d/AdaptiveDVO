@@ -38,7 +38,7 @@ namespace EdgeVO{
 
         //const int NUMBER_POINTS = 50;
 
-        const double COST_RATIO = 0.1; // E = E_photo[0,255] + COST_RATIO*E_depth[0,5]
+        const double COST_RATIO = 100; // E = E_photo[0,255] + COST_RATIO*E_depth[0,5]
         const double TH_GLR = 1.0;
 
         //const double COST_RATIO = 0.1;
@@ -46,7 +46,7 @@ namespace EdgeVO{
 
         //EdgeVO.h Huber Weights
         const float HUBER_THRESH = 5.f; // intensity dynamic range [0,255]
-        const float HUBER_THRESH_DEPTH = 5.f;//.03f; // depth dynamic range [0m, 5.0m]
+        const float HUBER_THRESH_DEPTH = 0.05f;//.03f; // depth dynamic range [0m, 5.0m]
         
         //#define EDGEVO_SUBSET_POINTS_EXACT true     //For only using a subset of points, uncomment this
 
@@ -107,7 +107,7 @@ namespace EdgeVO{
             std::string("rgbd_dataset_freiburg2_desk_secret")                     // 20
         };
 
-        const int DATASET_NUMBER = 14;
+        const int DATASET_NUMBER = 19;
 
         const int KEYFRAME_INTERVAL(1);
 
